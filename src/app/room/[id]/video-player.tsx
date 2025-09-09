@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Film } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Film, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { database } from '@/lib/firebase';
-import { ref, onValue, set, off } from 'firebase/database';
+import { ref, onValue, set, off, update } from 'firebase/database';
+import { Progress } from '@/components/ui/progress';
 
 interface VideoPlayerProps {
   roomId: string;
@@ -20,6 +21,10 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isLoadingVideo, setIsLoadingVideo] = useState(true);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -28,57 +33,75 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
 
-  // Effect for Firebase state synchronization
   useEffect(() => {
     const onStateChange = (snapshot: any) => {
-        const data = snapshot.val();
-        if (!data || !videoRef.current) return;
+      const data = snapshot.val();
+      setIsLoadingVideo(false);
+      if (!data) return;
 
-        // Anti-feedback loop: if the update was sent by this client in the last 1s, ignore it
-        if (Date.now() - lastSyncTimestamp.current < 1000) return;
+      if (data.videoSrc && data.videoSrc !== videoSrc) {
+        setVideoSrc(data.videoSrc);
+      }
+      
+      if (!data.videoSrc && videoSrc) {
+        setVideoSrc(null);
+      }
 
-        if (data.videoSrc && videoRef.current.src !== data.videoSrc) {
-            setVideoSrc(data.videoSrc);
-            videoRef.current.src = data.videoSrc;
+      if (videoRef.current) {
+        const serverTime = data.progress ?? 0;
+        const clientTime = videoRef.current.currentTime;
+        if (Math.abs(serverTime - clientTime) > 2) {
+          videoRef.current.currentTime = serverTime;
         }
 
-        if (data.progress && Math.abs(videoRef.current.currentTime - data.progress) > 1.5) {
-            videoRef.current.currentTime = data.progress;
+        const serverPlaying = data.isPlaying ?? false;
+        if (serverPlaying !== !videoRef.current.paused) {
+          if (serverPlaying) {
+            videoRef.current.play().catch(e => console.error("Play interrupted", e));
+          } else {
+            videoRef.current.pause();
+          }
         }
-
-        if (typeof data.isPlaying === 'boolean' && videoRef.current.paused !== !data.isPlaying) {
-            if (data.isPlaying) {
-                videoRef.current.play().catch(e => console.error("Play interrupted", e));
-            } else {
-                videoRef.current.pause();
-            }
-        }
+      }
     };
     onValue(roomStateRef, onStateChange);
     return () => {
-        off(roomStateRef, 'value', onStateChange);
+      off(roomStateRef, 'value', onStateChange);
     };
-  }, [roomId, videoSrc]);
+  }, [roomId]);
 
-  // Function to sync state to Firebase
+
   const syncState = (state: object) => {
-    if (isSeeking.current) return;
-    lastSyncTimestamp.current = Date.now();
-    set(roomStateRef, { ...state, timestamp: Date.now() });
+    if (Date.now() - lastSyncTimestamp.current > 250) {
+        update(roomStateRef, state);
+        lastSyncTimestamp.current = Date.now();
+    }
   };
   
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setVideoSrc(url);
-      if (videoRef.current) {
-        videoRef.current.src = url;
+      const reader = new FileReader();
+      reader.onloadstart = () => {
+        setIsUploading(true);
+        setUploadProgress(0);
+      };
+      reader.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentLoaded = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(percentLoaded);
+        }
+      };
+      reader.onload = (e) => {
+        const base64 = e.target?.result as string;
+        set(roomStateRef, { videoSrc: base64, isPlaying: false, progress: 0 });
+        setIsUploading(false);
+      };
+      reader.onerror = () => {
+        setIsUploading(false);
+        console.error("File could not be read");
       }
-      // Since videoSrc is not serializable for Firebase, we won't sync it.
-      // Other clients will be prompted to select the same file.
-      // A more robust solution would use a shared storage or streaming service.
-      set(roomStateRef, { isPlaying: false, progress: 0 });
+      reader.readAsDataURL(file);
     }
   };
 
@@ -118,12 +141,8 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
         const newTime = value[0];
         videoRef.current.currentTime = newTime;
         setProgress(newTime);
-        syncState({ isPlaying: !videoRef.current.paused, progress: newTime });
-        
-        // Allow seeking again after a short delay
-        setTimeout(() => {
-          isSeeking.current = false;
-        }, 200);
+        syncState({ progress: newTime });
+        isSeeking.current = false;
     }
   };
 
@@ -144,24 +163,24 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     }
   };
   
-  // Effect for video event listeners
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const onPlay = () => {
       setIsPlaying(true);
-      syncState({ isPlaying: true, progress: video.currentTime });
+      syncState({ isPlaying: true });
     };
     const onPause = () => {
       setIsPlaying(false);
       if(!isSeeking.current) {
-        syncState({ isPlaying: false, progress: video.currentTime });
+        syncState({ isPlaying: false });
       }
     };
     const onTimeUpdate = () => {
         if (!isSeeking.current) {
             setProgress(video.currentTime);
+            syncState({ progress: video.currentTime });
         }
     };
     const onDurationChange = () => {
@@ -182,9 +201,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('durationchange', onDurationChange);
       video.removeEventListener('loadedmetadata', onDurationChange);
-      if (videoSrc && videoSrc.startsWith('blob:')) {
-          URL.revokeObjectURL(videoSrc);
-      }
     };
   }, [videoSrc]);
 
@@ -206,19 +222,40 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
+  
+  if (isLoadingVideo) {
+    return (
+      <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
+        <Loader2 className="w-16 h-16 text-primary animate-spin" />
+        <h2 className="text-2xl font-bold">Loading Room...</h2>
+        <p className="text-muted-foreground max-w-sm">Getting things ready for your watch party.</p>
+      </div>
+    )
+  }
 
   if (!videoSrc) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
-        <Film className="w-16 h-16 text-muted-foreground" />
-        <h2 className="text-2xl font-bold">Select a video to start</h2>
-        <p className="text-muted-foreground max-w-sm">Choose a video file from your computer to begin the watch party. The video is streamed locally and not uploaded.</p>
-        <Button asChild className="mt-4">
-          <label htmlFor="video-upload" className="cursor-pointer">
-            Choose Video File
-          </label>
-        </Button>
-        <input id="video-upload" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
+        {isUploading ? (
+          <>
+            <Loader2 className="w-16 h-16 text-primary animate-spin" />
+            <h2 className="text-2xl font-bold">Uploading Video...</h2>
+            <p className="text-muted-foreground max-w-sm">Please wait while the video is being prepared for everyone.</p>
+            <Progress value={uploadProgress} className="w-full max-w-sm mt-4" />
+          </>
+        ) : (
+          <>
+            <Film className="w-16 h-16 text-muted-foreground" />
+            <h2 className="text-2xl font-bold">Select a video to start</h2>
+            <p className="text-muted-foreground max-w-sm">Choose a video file to begin the watch party. This will be uploaded to sync with everyone.</p>
+            <Button asChild className="mt-4">
+              <label htmlFor="video-upload" className="cursor-pointer">
+                Choose Video File
+              </label>
+            </Button>
+            <input id="video-upload" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
+          </>
+        )}
       </div>
     );
   }
