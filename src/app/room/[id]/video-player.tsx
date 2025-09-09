@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Film, Loader2 } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Film, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import { database } from '@/lib/firebase';
 import { ref, onValue, set, off, update } from 'firebase/database';
-import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface VideoPlayerProps {
   roomId: string;
@@ -22,6 +22,7 @@ interface RoomState {
 export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [roomFileName, setRoomFileName] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -46,13 +47,16 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       if (!data?.fileName) {
         setVideoSrc(null);
         setFileName(null);
+        setRoomFileName(null);
         return;
       }
       
+      setRoomFileName(data.fileName);
+
       if (videoRef.current && fileName === data.fileName) {
         const serverTime = data.progress ?? 0;
         const clientTime = videoRef.current.currentTime;
-        if (Math.abs(serverTime - clientTime) > 2) { // Sync if more than 2s difference
+        if (Math.abs(serverTime - clientTime) > 2) { 
           videoRef.current.currentTime = serverTime;
         }
 
@@ -92,7 +96,10 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       const newVideoSrc = URL.createObjectURL(file);
       setVideoSrc(newVideoSrc);
       setFileName(file.name);
-      set(roomStateRef, { fileName: file.name, isPlaying: false, progress: 0 });
+      
+      if (!roomFileName) {
+        set(roomStateRef, { fileName: file.name, isPlaying: false, progress: 0 });
+      }
     }
   };
 
@@ -160,18 +167,22 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
 
     const onPlay = () => {
       setIsPlaying(true);
-      syncState({ isPlaying: true });
+      if (fileName === roomFileName) {
+        syncState({ isPlaying: true });
+      }
     };
     const onPause = () => {
       setIsPlaying(false);
-      if(!isSeeking.current) {
+      if(!isSeeking.current && fileName === roomFileName) {
         syncState({ isPlaying: false });
       }
     };
     const onTimeUpdate = () => {
         if (!isSeeking.current) {
             setProgress(video.currentTime);
-            syncState({ progress: video.currentTime });
+            if (fileName === roomFileName) {
+              syncState({ progress: video.currentTime });
+            }
         }
     };
     const onDurationChange = () => {
@@ -193,7 +204,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       video.removeEventListener('durationchange', onDurationChange);
       video.removeEventListener('loadedmetadata', onDurationChange);
     };
-  }, [videoSrc]);
+  }, [videoSrc, roomFileName, fileName]);
 
   const handleMouseMove = () => {
     setShowControls(true);
@@ -228,8 +239,13 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Film className="w-16 h-16 text-muted-foreground" />
-        <h2 className="text-2xl font-bold">Select a video to start</h2>
-        <p className="text-muted-foreground max-w-sm">Choose a video file to begin the watch party. Playback will sync with others who load the same file.</p>
+        <h2 className="text-2xl font-bold">{roomFileName ? "Join the session" : "Select a video to start"}</h2>
+        <p className="text-muted-foreground max-w-sm">
+          {roomFileName 
+            ? <>The group is watching <span className="font-bold text-foreground">{roomFileName}</span>. Choose the same file to join in.</>
+            : "Choose a video file to begin the watch party. Playback will sync with others who load the same file."
+          }
+        </p>
         <Button asChild className="mt-4">
           <label htmlFor="video-upload" className="cursor-pointer">
             Choose Video File
@@ -243,7 +259,29 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   return (
     <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
       <video ref={videoRef} src={videoSrc} className="w-full h-full object-contain" onClick={togglePlay} />
+      
+      {fileName !== roomFileName && roomFileName && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
+            <Alert variant="destructive" className="max-w-md">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>File Mismatch</AlertTitle>
+                <AlertDescription>
+                    The video you selected (<span className="font-bold">{fileName}</span>) is different from the one being played in the room (<span className="font-bold">{roomFileName}</span>). Please select the correct file to sync with the group.
+                </AlertDescription>
+                <div className="mt-4">
+                    <Button asChild variant="secondary">
+                        <label htmlFor="video-upload" className="cursor-pointer">
+                            Choose Correct Video File
+                        </label>
+                    </Button>
+                    <input id="video-upload" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
+                </div>
+            </Alert>
+        </div>
+      )}
+
       <div className={cn("absolute inset-0 bg-black/20 transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0", "pointer-events-none")} />
+      
       <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0")}>
         <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -260,7 +298,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
             </div>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/20 hover:text-white">
+                    <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/20 hover:text-white" disabled={fileName !== roomFileName}>
                         {isPlaying ? <Pause /> : <Play />}
                     </Button>
                     <div className="flex items-center gap-2 w-32">
@@ -284,3 +322,5 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     </div>
   );
 }
+
+    
