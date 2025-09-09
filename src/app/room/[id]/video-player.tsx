@@ -25,7 +25,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSeeking = useRef(false);
   const lastSyncTimestamp = useRef(0);
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
 
@@ -47,7 +46,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
             videoRef.current.currentTime = data.progress;
         }
 
-        if (typeof data.isPlaying === 'boolean' && videoRef.current.paused === data.isPlaying) {
+        if (typeof data.isPlaying === 'boolean' && videoRef.current.paused !== !data.isPlaying) {
             if (data.isPlaying) {
                 videoRef.current.play().catch(e => console.error("Play interrupted", e));
             } else {
@@ -76,7 +75,10 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       if (videoRef.current) {
         videoRef.current.src = url;
       }
-      syncState({ videoSrc: url, isPlaying: false, progress: 0 });
+      // Since videoSrc is not serializable for Firebase, we won't sync it.
+      // Other clients will be prompted to select the same file.
+      // A more robust solution would use a shared storage or streaming service.
+      set(roomStateRef, { isPlaying: false, progress: 0 });
     }
   };
 
@@ -116,7 +118,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
         const newTime = value[0];
         videoRef.current.currentTime = newTime;
         setProgress(newTime);
-        syncState({ isPlaying: !videoRef.current.paused, progress: newTime, videoSrc });
+        syncState({ isPlaying: !videoRef.current.paused, progress: newTime });
         
         // Allow seeking again after a short delay
         setTimeout(() => {
@@ -149,12 +151,12 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
 
     const onPlay = () => {
       setIsPlaying(true);
-      syncState({ isPlaying: true, progress: video.currentTime, videoSrc });
+      syncState({ isPlaying: true, progress: video.currentTime });
     };
     const onPause = () => {
       setIsPlaying(false);
       if(!isSeeking.current) {
-        syncState({ isPlaying: false, progress: video.currentTime, videoSrc });
+        syncState({ isPlaying: false, progress: video.currentTime });
       }
     };
     const onTimeUpdate = () => {
