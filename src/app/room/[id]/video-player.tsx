@@ -24,94 +24,72 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const playerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSeeking = useRef(false);
-  const lastSyncTimestamp = useRef(Date.now());
-  const isSyncing = useRef(false);
-
+  const lastSyncTimestamp = useRef(0);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
 
+  // Effect for Firebase state synchronization
   useEffect(() => {
-    if (!roomId) return;
-
     const onStateChange = (snapshot: any) => {
-      const data = snapshot.val();
-      if (!data) return;
-      
-      const { isPlaying: remoteIsPlaying, progress: remoteProgress, videoSrc: remoteVideoSrc, timestamp } = data;
-      
-      if (Date.now() - lastSyncTimestamp.current < 500) return;
+        const data = snapshot.val();
+        if (!data || !videoRef.current) return;
 
-      isSyncing.current = true;
+        // Anti-feedback loop: if the update was sent by this client in the last 1s, ignore it
+        if (Date.now() - lastSyncTimestamp.current < 1000) return;
 
-      if (videoRef.current) {
-        if (remoteVideoSrc !== videoSrc) {
-          setVideoSrc(remoteVideoSrc);
+        if (data.videoSrc && videoRef.current.src !== data.videoSrc) {
+            setVideoSrc(data.videoSrc);
+            videoRef.current.src = data.videoSrc;
         }
 
-        if (videoRef.current.src !== remoteVideoSrc) {
-          videoRef.current.src = remoteVideoSrc;
+        if (data.progress && Math.abs(videoRef.current.currentTime - data.progress) > 1.5) {
+            videoRef.current.currentTime = data.progress;
         }
 
-        if (Math.abs(videoRef.current.currentTime - remoteProgress) > 2) {
-            videoRef.current.currentTime = remoteProgress;
-            setProgress(remoteProgress);
+        if (typeof data.isPlaying === 'boolean' && videoRef.current.paused === data.isPlaying) {
+            if (data.isPlaying) {
+                videoRef.current.play().catch(e => console.error("Play interrupted", e));
+            } else {
+                videoRef.current.pause();
+            }
         }
-        
-        if (videoRef.current.paused !== !remoteIsPlaying) {
-           if (remoteIsPlaying) {
-             videoRef.current.play().catch(() => {});
-           } else {
-             videoRef.current.pause();
-           }
-        }
-      } else {
-         if (remoteVideoSrc) {
-            setVideoSrc(remoteVideoSrc);
-         }
-      }
-      setIsPlaying(remoteIsPlaying);
-
-      setTimeout(() => {
-        isSyncing.current = false;
-      }, 100);
     };
-
     onValue(roomStateRef, onStateChange);
-
     return () => {
-      off(roomStateRef, 'value', onStateChange);
+        off(roomStateRef, 'value', onStateChange);
     };
   }, [roomId, videoSrc]);
 
-
+  // Function to sync state to Firebase
   const syncState = (state: object) => {
-    if (isSyncing.current) return;
+    if (isSeeking.current) return;
     lastSyncTimestamp.current = Date.now();
     set(roomStateRef, { ...state, timestamp: Date.now() });
   };
-
+  
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
       setVideoSrc(url);
-      setIsPlaying(false);
-      setProgress(0);
+      if (videoRef.current) {
+        videoRef.current.src = url;
+      }
       syncState({ videoSrc: url, isPlaying: false, progress: 0 });
     }
   };
 
   const togglePlay = () => {
     if (videoRef.current) {
-      const newIsPlaying = !isPlaying;
-      if (newIsPlaying) {
-        videoRef.current.play();
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch(e => console.error("Play error", e));
       } else {
         videoRef.current.pause();
       }
-      // The event listeners for 'play' and 'pause' will handle syncing
     }
   };
-  
+
   const handleVolumeChange = (value: number[]) => {
     if (videoRef.current) {
       const newVolume = value[0];
@@ -123,26 +101,34 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   };
 
   const toggleMute = () => {
-      if(videoRef.current) {
-          const currentlyMuted = !videoRef.current.muted;
-          videoRef.current.muted = currentlyMuted;
-          setIsMuted(currentlyMuted);
-          if (!currentlyMuted && volume === 0) {
-            setVolume(0.5);
-            videoRef.current.volume = 0.5;
-          }
+    if (videoRef.current) {
+      const newMuted = !isMuted;
+      videoRef.current.muted = newMuted;
+      setIsMuted(newMuted);
+      if (!newMuted && volume === 0) {
+        handleVolumeChange([0.5]);
       }
+    }
   };
   
-  const handleProgressChange = (value: number[]) => {
+  const handleProgressChangeCommit = (value: number[]) => {
     if (videoRef.current) {
-        isSeeking.current = false;
         const newTime = value[0];
         videoRef.current.currentTime = newTime;
         setProgress(newTime);
-        syncState({ isPlaying, progress: newTime, videoSrc });
+        syncState({ isPlaying: !videoRef.current.paused, progress: newTime, videoSrc });
+        
+        // Allow seeking again after a short delay
+        setTimeout(() => {
+          isSeeking.current = false;
+        }, 200);
     }
   };
+
+  const handleProgressChange = (value: number[]) => {
+    isSeeking.current = true;
+    setProgress(value[0]);
+  }
   
   const toggleFullScreen = () => {
     if (playerRef.current) {
@@ -155,45 +141,48 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       }
     }
   };
-
+  
+  // Effect for video event listeners
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    
-    const updateProgress = () => {
-      if (!isSeeking.current) {
-        setProgress(video.currentTime);
-      }
-    }
-    const setVideoDuration = () => {
-      if(video.duration !== Infinity) {
-        setDuration(video.duration)
-      }
-    };
 
-    const handlePlay = () => {
+    const onPlay = () => {
       setIsPlaying(true);
       syncState({ isPlaying: true, progress: video.currentTime, videoSrc });
     };
-
-    const handlePause = () => {
+    const onPause = () => {
       setIsPlaying(false);
-      syncState({ isPlaying: false, progress: video.currentTime, videoSrc });
+      if(!isSeeking.current) {
+        syncState({ isPlaying: false, progress: video.currentTime, videoSrc });
+      }
     };
-    
-    video.addEventListener('timeupdate', updateProgress);
-    video.addEventListener('loadedmetadata', setVideoDuration);
-    video.addEventListener('durationchange', setVideoDuration);
-    video.addEventListener('play', handlePlay);
-    video.addEventListener('pause', handlePause);
+    const onTimeUpdate = () => {
+        if (!isSeeking.current) {
+            setProgress(video.currentTime);
+        }
+    };
+    const onDurationChange = () => {
+        if (video.duration !== Infinity) {
+            setDuration(video.duration);
+        }
+    };
+
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
+    video.addEventListener('timeupdate', onTimeUpdate);
+    video.addEventListener('durationchange', onDurationChange);
+    video.addEventListener('loadedmetadata', onDurationChange);
     
     return () => {
-      video.removeEventListener('timeupdate', updateProgress);
-      video.removeEventListener('loadedmetadata', setVideoDuration);
-      video.removeEventListener('durationchange', setVideoDuration);
-      video.removeEventListener('play', handlePlay);
-      video.removeEventListener('pause', handlePause);
-      if (videoSrc && videoSrc.startsWith('blob:')) URL.revokeObjectURL(videoSrc);
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.removeEventListener('durationchange', onDurationChange);
+      video.removeEventListener('loadedmetadata', onDurationChange);
+      if (videoSrc && videoSrc.startsWith('blob:')) {
+          URL.revokeObjectURL(videoSrc);
+      }
     };
   }, [videoSrc]);
 
@@ -244,11 +233,8 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                     value={[progress]}
                     max={duration}
                     step={1}
-                    onValueChange={(value) => {
-                      isSeeking.current = true;
-                      setProgress(value[0]);
-                    }}
-                    onValueCommit={handleProgressChange}
+                    onValueChange={handleProgressChange}
+                    onValueCommit={handleProgressChangeCommit}
                     className="flex-1"
                 />
                 <span className="text-xs font-mono text-white">{formatTime(duration)}</span>
