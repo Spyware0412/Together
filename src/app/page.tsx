@@ -11,7 +11,7 @@ export default function Home() {
         <CardHeader className="text-center">
           <div className="flex justify-center items-center gap-3 mb-4">
             <Film className="w-10 h-10 text-primary" />
-            <h1 className="text-4xl font-bold font-headline">CineSync</h1>
+            <h1 className="text-4xl font-bold font-headline">Together 💖</h1>
           </div>
           <CardDescription className="text-lg">
             Watch movies together, in sync.
@@ -28,7 +28,7 @@ export default function Home() {
         </CardContent>
       </Card>
       <footer className="absolute bottom-4 text-center text-xs text-muted-foreground">
-        <p>Created for your watch parties.</p>
+        <p>built for manoshi</p>
       </footer>
     </main>
   );

@@ -1,14 +1,31 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Film, Loader2, AlertTriangle, Crown } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { cn } from '@/lib/utils';
-import { database } from '@/lib/firebase';
-import { ref, onValue, set, off, update, onDisconnect, serverTimestamp } from 'firebase/database';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { v4 as uuidv4 } from 'uuid';
+import { useState, useRef, useEffect } from "react";
+import {
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Film,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
+import { database } from "@/lib/firebase";
+import {
+  ref,
+  onValue,
+  set,
+  off,
+  update,
+  onDisconnect,
+  serverTimestamp,
+} from "firebase/database";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { v4 as uuidv4 } from "uuid";
 
 interface VideoPlayerProps {
   roomId: string;
@@ -24,7 +41,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
-  
+
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -38,6 +55,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const isSeeking = useRef(false);
   const lastSyncTimestamp = useRef(0);
   const [userId] = useState(() => uuidv4());
+  const isRemoteUpdate = useRef(false); // 🚀 Fix loop issue
 
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
   const userStatusRef = ref(database, `rooms/${roomId}/users/${userId}`);
@@ -45,10 +63,10 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   useEffect(() => {
     // Set user presence
     onValue(userStatusRef, (snapshot) => {
-        if (!snapshot.exists()) {
-            set(userStatusRef, { online: true, last_seen: serverTimestamp() });
-            onDisconnect(userStatusRef).remove();
-        }
+      if (!snapshot.exists()) {
+        set(userStatusRef, { online: true, last_seen: serverTimestamp() });
+        onDisconnect(userStatusRef).remove();
+      }
     });
 
     const onStateChange = (snapshot: any) => {
@@ -59,44 +77,48 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       if (data?.fileName && videoRef.current && fileName === data.fileName) {
         const serverTime = data.progress ?? 0;
         const clientTime = videoRef.current.currentTime;
-        // Sync time if difference is more than 2 seconds and user is not seeking
-        if (!isSeeking.current && Math.abs(serverTime - clientTime) > 2) { 
+
+        // Sync time if difference > 2s
+        if (!isSeeking.current && Math.abs(serverTime - clientTime) > 2) {
+          isRemoteUpdate.current = true;
           videoRef.current.currentTime = serverTime;
+          isRemoteUpdate.current = false;
         }
 
         const serverPlaying = data.isPlaying ?? false;
-        // Sync play/pause state
         if (serverPlaying !== !videoRef.current.paused) {
+          isRemoteUpdate.current = true;
           if (serverPlaying) {
-            videoRef.current.play().catch(e => {}); // Catch errors if play is interrupted
+            videoRef.current.play().catch(() => {});
           } else {
             videoRef.current.pause();
           }
+          isRemoteUpdate.current = false;
         }
       }
     };
 
     onValue(roomStateRef, onStateChange);
-    
+
     return () => {
-      off(roomStateRef, 'value', onStateChange);
-      if(userStatusRef) {
+      off(roomStateRef, "value", onStateChange);
+      if (userStatusRef) {
         onDisconnect(userStatusRef).cancel();
         set(userStatusRef, null);
       }
     };
   }, [roomId, fileName]);
-  
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       if (videoSrc) {
-          URL.revokeObjectURL(videoSrc);
+        URL.revokeObjectURL(videoSrc);
       }
       const newVideoSrc = URL.createObjectURL(file);
       setVideoSrc(newVideoSrc);
       setFileName(file.name);
-      
+
       if (!roomState?.fileName) {
         set(roomStateRef, { fileName: file.name, isPlaying: false, progress: 0 });
       } else {
@@ -114,8 +136,11 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
 
   const togglePlay = () => {
     if (videoRef.current) {
-      const newIsPlaying = !videoRef.current.paused;
-      syncState({ isPlaying: newIsPlaying });
+      if (videoRef.current.paused) {
+        syncState({ isPlaying: true });
+      } else {
+        syncState({ isPlaying: false });
+      }
     }
   };
 
@@ -139,71 +164,74 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       }
     }
   };
-  
+
   const handleProgressChangeCommit = (value: number[]) => {
     if (videoRef.current) {
-        const newTime = value[0];
-        videoRef.current.currentTime = newTime;
-        setProgress(newTime);
-        syncState({ progress: newTime });
-        isSeeking.current = false;
+      const newTime = value[0];
+      videoRef.current.currentTime = newTime;
+      setProgress(newTime);
+      syncState({ progress: newTime });
+      isSeeking.current = false;
     }
   };
 
   const handleProgressChange = (value: number[]) => {
-      isSeeking.current = true;
-      setProgress(value[0]);
-  }
-  
+    isSeeking.current = true;
+    setProgress(value[0]);
+  };
+
   const toggleFullScreen = () => {
     if (playerRef.current) {
       if (!document.fullscreenElement) {
-        playerRef.current.requestFullscreen().catch(err => {
-          console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+        playerRef.current.requestFullscreen().catch((err) => {
+          console.error(`Error enabling fullscreen: ${err.message}`);
         });
       } else {
         document.exitFullscreen();
       }
     }
   };
-  
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const onPlay = () => syncState({ isPlaying: true });
+    const onPlay = () => {
+      if (!isRemoteUpdate.current) syncState({ isPlaying: true });
+    };
     const onPause = () => {
-      if(!isSeeking.current) syncState({ isPlaying: false });
+      if (!isRemoteUpdate.current && !isSeeking.current) {
+        syncState({ isPlaying: false });
+      }
     };
     const onTimeUpdate = () => {
-        if (!isSeeking.current) {
-            const currentTime = video.currentTime;
-            setProgress(currentTime);
-            // Sync progress periodically
-            if (Date.now() - lastSyncTimestamp.current > 1000) {
-              syncState({ progress: currentTime });
-              lastSyncTimestamp.current = Date.now();
-            }
+      if (!isSeeking.current) {
+        const currentTime = video.currentTime;
+        setProgress(currentTime);
+        if (Date.now() - lastSyncTimestamp.current > 1000) {
+          syncState({ progress: currentTime });
+          lastSyncTimestamp.current = Date.now();
         }
+      }
     };
     const onDurationChange = () => {
-        if (video.duration !== Infinity) {
-            setDuration(video.duration);
-        }
+      if (video.duration !== Infinity) {
+        setDuration(video.duration);
+      }
     };
 
-    video.addEventListener('play', onPlay);
-    video.addEventListener('pause', onPause);
-    video.addEventListener('timeupdate', onTimeUpdate);
-    video.addEventListener('durationchange', onDurationChange);
-    video.addEventListener('loadedmetadata', onDurationChange);
-    
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("durationchange", onDurationChange);
+    video.addEventListener("loadedmetadata", onDurationChange);
+
     return () => {
-      video.removeEventListener('play', onPlay);
-      video.removeEventListener('pause', onPause);
-      video.removeEventListener('timeupdate', onTimeUpdate);
-      video.removeEventListener('durationchange', onDurationChange);
-      video.removeEventListener('loadedmetadata', onDurationChange);
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("durationchange", onDurationChange);
+      video.removeEventListener("loadedmetadata", onDurationChange);
     };
   }, [videoSrc]);
 
@@ -212,47 +240,64 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
   };
-  
+
   const handleMouseLeave = () => {
     if (roomState?.isPlaying) {
       setShowControls(false);
     }
-  }
+  };
 
   const formatTime = (time: number) => {
-    if (isNaN(time)) return '0:00';
+    if (isNaN(time)) return "0:00";
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
-  
+
   if (isLoading) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Loader2 className="w-16 h-16 text-primary animate-spin" />
         <h2 className="text-2xl font-bold">Loading Room...</h2>
-        <p className="text-muted-foreground max-w-sm">Getting things ready for your watch party.</p>
+        <p className="text-muted-foreground max-w-sm">
+          Getting things ready for your watch party.
+        </p>
       </div>
-    )
+    );
   }
 
   if (!videoSrc) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Film className="w-16 h-16 text-muted-foreground" />
-        <h2 className="text-2xl font-bold">{roomState?.fileName ? "Join the session" : "Select a video to start"}</h2>
+        <h2 className="text-2xl font-bold">
+          {roomState?.fileName ? "Join the session" : "Select a video to start"}
+        </h2>
         <p className="text-muted-foreground max-w-sm">
-          {roomState?.fileName 
-            ? <>The group is watching <span className="font-bold text-foreground">{roomState?.fileName}</span>. Choose the same file to join in.</>
-            : "Choose a video file to begin the watch party. Playback will sync with others who load the same file."
-          }
+          {roomState?.fileName ? (
+            <>
+              The group is watching{" "}
+              <span className="font-bold text-foreground">
+                {roomState?.fileName}
+              </span>
+              . Choose the same file to join in.
+            </>
+          ) : (
+            "Choose a video file to begin the watch party. Playback will sync with others who load the same file."
+          )}
         </p>
         <Button asChild className="mt-4">
           <label htmlFor="video-upload" className="cursor-pointer">
             Choose Video File
           </label>
         </Button>
-        <input id="video-upload" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
+        <input
+          id="video-upload"
+          type="file"
+          accept="video/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
     );
   }
@@ -260,67 +305,122 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const isPlaybackDisabled = fileName !== roomState?.fileName;
 
   return (
-    <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <video ref={videoRef} src={videoSrc} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} />
-      
+    <div
+      ref={playerRef}
+      className="relative w-full h-full bg-black rounded-lg overflow-hidden group"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <video
+        ref={videoRef}
+        src={videoSrc}
+        className="w-full h-full object-contain"
+        onClick={togglePlay}
+        onDoubleClick={toggleFullScreen}
+      />
+
       {fileName !== roomState?.fileName && roomState?.fileName && (
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
-            <Alert variant="destructive" className="max-w-md">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>File Mismatch</AlertTitle>
-                <AlertDescription>
-                    The video you selected (<span className="font-bold">{fileName}</span>) is different from the one being played in the room (<span className="font-bold">{roomState.fileName}</span>). Please select the correct file to sync with the group.
-                </AlertDescription>
-                <div className="mt-4">
-                    <Button asChild variant="secondary">
-                        <label htmlFor="video-upload" className="cursor-pointer">
-                            Choose Correct Video File
-                        </label>
-                    </Button>
-                    <input id="video-upload" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
-                </div>
-            </Alert>
+          <Alert variant="destructive" className="max-w-md">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>File Mismatch</AlertTitle>
+            <AlertDescription>
+              The video you selected (
+              <span className="font-bold">{fileName}</span>) is different from
+              the one being played in the room (
+              <span className="font-bold">{roomState.fileName}</span>). Please
+              select the correct file to sync with the group.
+            </AlertDescription>
+            <div className="mt-4">
+              <Button asChild variant="secondary">
+                <label htmlFor="video-upload" className="cursor-pointer">
+                  Choose Correct Video File
+                </label>
+              </Button>
+              <input
+                id="video-upload"
+                type="file"
+                accept="video/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+          </Alert>
         </div>
       )}
-      
-      <div className={cn("absolute inset-0 bg-black/20 transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0", "pointer-events-none")} />
-      
-      <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 z-10", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0", "pointer-events-auto")}>
+
+      {/* Overlay background */}
+      <div
+        className={cn(
+          "absolute inset-0 bg-black/20 transition-opacity duration-300",
+          showControls ? "opacity-100" : "opacity-0",
+          "pointer-events-none"
+        )}
+      />
+
+      {/* Controls */}
+      <div
+        className={cn(
+          "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 z-10",
+          showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0",
+          "pointer-events-auto"
+        )}
+      >
         <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-white">
+              {formatTime(progress)}
+            </span>
+            <Slider
+              value={[progress]}
+              max={duration}
+              step={1}
+              onValueChange={handleProgressChange}
+              onValueCommit={handleProgressChangeCommit}
+              className="flex-1"
+              disabled={isPlaybackDisabled}
+            />
+            <span className="text-xs font-mono text-white">
+              {formatTime(duration)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-white">{formatTime(progress)}</span>
-                <Slider
-                    value={[progress]}
-                    max={duration}
-                    step={1}
-                    onValueChange={handleProgressChange}
-                    onValueCommit={handleProgressChangeCommit}
-                    className="flex-1"
-                    disabled={isPlaybackDisabled}
-                />
-                <span className="text-xs font-mono text-white">{formatTime(duration)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}>
-                        {roomState?.isPlaying ? <Pause /> : <Play />}
-                    </Button>
-                    <div className="flex items-center gap-2 w-32">
-                        <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white hover:bg-white/20 hover:text-white">
-                            {isMuted || volume === 0 ? <VolumeX /> : <Volume2 />}
-                        </Button>
-                        <Slider
-                            value={[isMuted ? 0 : volume]}
-                            max={1}
-                            step={0.05}
-                            onValueChange={handleVolumeChange}
-                        />
-                    </div>
-                </div>
-                <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/20 hover:text-white">
-                    <Maximize />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={togglePlay}
+                className="text-white hover:bg-white/20 hover:text-white"
+                disabled={isPlaybackDisabled}
+              >
+                {roomState?.isPlaying ? <Pause /> : <Play />}
+              </Button>
+              <div className="flex items-center gap-2 w-32">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleMute}
+                  className="text-white hover:bg-white/20 hover:text-white"
+                >
+                  {isMuted || volume === 0 ? <VolumeX /> : <Volume2 />}
                 </Button>
+                <Slider
+                  value={[isMuted ? 0 : volume]}
+                  max={1}
+                  step={0.05}
+                  onValueChange={handleVolumeChange}
+                />
+              </div>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleFullScreen}
+              className="text-white hover:bg-white/20 hover:text-white"
+            >
+              <Maximize />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
