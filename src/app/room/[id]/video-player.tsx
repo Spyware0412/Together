@@ -48,10 +48,11 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const hasControl = roomState?.controllerId === null || isController;
 
   useEffect(() => {
+    // Set user presence
     onValue(userStatusRef, (snapshot) => {
         if (!snapshot.exists()) {
-             set(userStatusRef, { online: true, last_seen: serverTimestamp() });
-             onDisconnect(userStatusRef).remove();
+            set(userStatusRef, { online: true, last_seen: serverTimestamp() });
+            onDisconnect(userStatusRef).remove();
         }
     });
 
@@ -59,24 +60,20 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       const data: RoomState | null = snapshot.val();
       setIsLoading(false);
       setRoomState(data);
-      
-      if (!data?.fileName) {
-        setVideoSrc(null);
-        setFileName(null);
-        return;
-      }
 
-      if (videoRef.current && fileName === data.fileName) {
+      if (data?.fileName && videoRef.current && fileName === data.fileName) {
         const serverTime = data.progress ?? 0;
         const clientTime = videoRef.current.currentTime;
+        // Sync time if difference is more than 2 seconds
         if (Math.abs(serverTime - clientTime) > 2) { 
           videoRef.current.currentTime = serverTime;
         }
 
         const serverPlaying = data.isPlaying ?? false;
+        // Sync play/pause state
         if (serverPlaying !== !videoRef.current.paused) {
           if (serverPlaying) {
-            videoRef.current.play().catch(e => {});
+            videoRef.current.play().catch(e => {}); // Catch errors if play is interrupted
           } else {
             videoRef.current.pause();
           }
@@ -89,34 +86,28 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     // When controller disconnects, assign a new one
     onValue(usersRef, (snapshot) => {
         const users = snapshot.val();
-        if (users && roomState?.controllerId && !users[roomState.controllerId]) {
-            const remainingUsers = Object.keys(users);
+        if (roomState?.controllerId && (!users || !users[roomState.controllerId])) {
+            const remainingUsers = users ? Object.keys(users) : [];
             if(remainingUsers.length > 0) {
                 const newController = remainingUsers[0];
-                update(roomStateRef, { controllerId: newController });
+                if(roomState.controllerId !== newController) {
+                   update(roomStateRef, { controllerId: newController });
+                }
             } else {
-                 update(roomStateRef, { controllerId: null });
+                 update(roomStateRef, { controllerId: null, isPlaying: false });
             }
         }
     });
 
     return () => {
-      off(roomStateRef);
-      off(userStatusRef);
+      off(roomStateRef, 'value', onStateChange);
       off(usersRef);
-      if (videoSrc) {
-        URL.revokeObjectURL(videoSrc);
+      if(userStatusRef) {
+        onDisconnect(userStatusRef).cancel();
+        set(userStatusRef, null);
       }
-      set(userStatusRef, null); // Mark user as offline
     };
-  }, [roomId, fileName, videoSrc, userId, roomState?.controllerId]);
-
-  const syncState = (state: Partial<RoomState>) => {
-    if (Date.now() - lastSyncTimestamp.current > 250 && isController) {
-        update(roomStateRef, state);
-        lastSyncTimestamp.current = Date.now();
-    }
-  };
+  }, [roomId, fileName, roomState?.controllerId]);
   
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -128,21 +119,29 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       setVideoSrc(newVideoSrc);
       setFileName(file.name);
       
+      // If no video is playing, this user becomes controller
       if (!roomState?.fileName) {
         set(roomStateRef, { fileName: file.name, isPlaying: false, progress: 0, controllerId: userId });
+      } else {
+        // If joining, reset local state until synced
+        if (videoRef.current) {
+          videoRef.current.currentTime = 0;
+        }
+        setProgress(0);
       }
+    }
+  };
+
+  const syncState = (state: Partial<RoomState>) => {
+    if (hasControl) {
+      update(roomStateRef, state);
     }
   };
 
   const togglePlay = () => {
     if (videoRef.current && hasControl) {
-      const newIsPlaying = !roomState?.isPlaying;
-      if (newIsPlaying) {
-        videoRef.current.play().catch(e => console.error("Play error", e));
-      } else {
-        videoRef.current.pause();
-      }
-      update(roomStateRef, { isPlaying: newIsPlaying });
+      const newIsPlaying = !videoRef.current.paused;
+      syncState({ isPlaying: newIsPlaying });
     }
   };
 
@@ -172,7 +171,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
         const newTime = value[0];
         videoRef.current.currentTime = newTime;
         setProgress(newTime);
-        update(roomStateRef, { progress: newTime });
+        syncState({ progress: newTime });
         isSeeking.current = false;
     }
   };
@@ -208,9 +207,12 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     };
     const onTimeUpdate = () => {
         if (!isSeeking.current) {
-            setProgress(video.currentTime);
-            if (isController) {
-              syncState({ progress: video.currentTime });
+            const currentTime = video.currentTime;
+            setProgress(currentTime);
+            // Sync progress periodically
+            if (isController && Date.now() - lastSyncTimestamp.current > 1000) {
+              syncState({ progress: currentTime });
+              lastSyncTimestamp.current = Date.now();
             }
         }
     };
@@ -289,7 +291,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
 
   return (
     <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <video ref={videoRef} src={videoSrc} className="w-full h-full object-contain" onClick={togglePlay} />
+      <video ref={videoRef} src={videoSrc} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} />
       
       {fileName !== roomState?.fileName && roomState?.fileName && (
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
@@ -312,7 +314,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       )}
       
       {isController && (
-        <div className={cn("absolute top-4 left-4 p-2 bg-black/50 rounded-lg text-white text-xs flex items-center gap-2 transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0")}>
+        <div className={cn("absolute top-4 left-4 p-2 bg-black/50 rounded-lg text-white text-xs flex items-center gap-2 transition-opacity duration-300 z-10", showControls ? "opacity-100" : "opacity-0 pointer-events-none")}>
             <Crown className="w-4 h-4 text-amber-400"/> You are the controller
         </div>
       )}
@@ -320,7 +322,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
 
       <div className={cn("absolute inset-0 bg-black/20 transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0", "pointer-events-none")} />
       
-      <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0")}>
+      <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 z-10", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0", "pointer-events-auto")}>
         <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
                 <span className="text-xs font-mono text-white">{formatTime(progress)}</span>
@@ -361,3 +363,5 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     </div>
   );
 }
+
+    
