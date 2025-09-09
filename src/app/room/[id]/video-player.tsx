@@ -25,6 +25,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSeeking = useRef(false);
   const lastSyncTimestamp = useRef(Date.now());
+  const isSyncing = useRef(false);
 
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
 
@@ -38,6 +39,8 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       const { isPlaying: remoteIsPlaying, progress: remoteProgress, videoSrc: remoteVideoSrc, timestamp } = data;
       
       if (Date.now() - lastSyncTimestamp.current < 500) return;
+
+      isSyncing.current = true;
 
       if (videoRef.current) {
         if (remoteVideoSrc !== videoSrc) {
@@ -53,9 +56,9 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
             setProgress(remoteProgress);
         }
         
-        if (videoRef.current.paused === remoteIsPlaying) {
+        if (videoRef.current.paused !== !remoteIsPlaying) {
            if (remoteIsPlaying) {
-             videoRef.current.play();
+             videoRef.current.play().catch(() => {});
            } else {
              videoRef.current.pause();
            }
@@ -65,8 +68,11 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
             setVideoSrc(remoteVideoSrc);
          }
       }
-
       setIsPlaying(remoteIsPlaying);
+
+      setTimeout(() => {
+        isSyncing.current = false;
+      }, 100);
     };
 
     onValue(roomStateRef, onStateChange);
@@ -78,6 +84,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
 
 
   const syncState = (state: object) => {
+    if (isSyncing.current) return;
     lastSyncTimestamp.current = Date.now();
     set(roomStateRef, { ...state, timestamp: Date.now() });
   };
@@ -101,8 +108,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       } else {
         videoRef.current.pause();
       }
-      setIsPlaying(newIsPlaying);
-      syncState({ isPlaying: newIsPlaying, progress: videoRef.current.currentTime, videoSrc });
+      // The event listeners for 'play' and 'pause' will handle syncing
     }
   };
   
@@ -164,25 +170,29 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
         setDuration(video.duration)
       }
     };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+      syncState({ isPlaying: true, progress: video.currentTime, videoSrc });
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+      syncState({ isPlaying: false, progress: video.currentTime, videoSrc });
+    };
     
     video.addEventListener('timeupdate', updateProgress);
     video.addEventListener('loadedmetadata', setVideoDuration);
     video.addEventListener('durationchange', setVideoDuration);
-    video.addEventListener('play', () => {
-      setIsPlaying(true);
-      syncState({ isPlaying: true, progress: video.currentTime, videoSrc });
-    });
-    video.addEventListener('pause', () => {
-      setIsPlaying(false);
-      syncState({ isPlaying: false, progress: video.currentTime, videoSrc });
-    });
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
     
     return () => {
       video.removeEventListener('timeupdate', updateProgress);
       video.removeEventListener('loadedmetadata', setVideoDuration);
       video.removeEventListener('durationchange', setVideoDuration);
-       video.removeEventListener('play', () => setIsPlaying(true));
-      video.removeEventListener('pause', () => setIsPlaying(false));
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
       if (videoSrc && videoSrc.startsWith('blob:')) URL.revokeObjectURL(videoSrc);
     };
   }, [videoSrc]);
