@@ -28,7 +28,7 @@ interface ChatProps {
 export function Chat({ roomId }: ChatProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
-    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const viewportRef = useRef<HTMLDivElement>(null);
     const [userId] = useState(() => `user_${uuidv4()}`);
     const [userName] = useState(() => `User${Math.floor(Math.random() * 1000)}`);
     const messagesRef = ref(database, `rooms/${roomId}/chat`);
@@ -66,8 +66,8 @@ export function Chat({ roomId }: ChatProps) {
     };
     
     useEffect(() => {
-        if(scrollAreaRef.current) {
-            scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+        if(viewportRef.current) {
+            viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' });
         }
     }, [messages]);
 
@@ -76,7 +76,7 @@ export function Chat({ roomId }: ChatProps) {
             <CardHeader>
                 <CardTitle>Live Chat</CardTitle>
             </CardHeader>
-            <ScrollArea className="flex-1 px-4" viewportRef={scrollAreaRef}>
+            <ScrollArea className="flex-1 px-4" viewportRef={viewportRef}>
                 <div className="space-y-4 pb-4">
                     {messages.map((message) => (
                         <div key={message.id} className="flex items-start gap-3">
