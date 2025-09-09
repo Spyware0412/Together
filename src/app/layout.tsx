@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: 'Together 💖',
-  description: 'Watch movies together, in sync.',
+  description: 'Built for Manoshi',
 };
 
 export default function RootLayout({

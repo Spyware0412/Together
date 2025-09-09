@@ -14,7 +14,7 @@ export default function Home() {
             <h1 className="text-4xl font-bold font-headline">Together 💖</h1>
           </div>
           <CardDescription className="text-lg">
-            Watch movies together, in sync.
+            Built for Manoshi
           </CardDescription>
         </CardHeader>
         <CardContent>
