@@ -7,36 +7,60 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Send } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
+import { database } from '@/lib/firebase';
+import { ref, onValue, push, serverTimestamp, off } from 'firebase/database';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Message {
-    id: number;
+    id: string;
     user: {
         name: string;
         avatar: string;
     };
     text: string;
+    timestamp: number;
 }
 
-const initialMessages: Message[] = [
-    { id: 1, user: { name: 'Alex', avatar: 'https://picsum.photos/seed/alex/40/40' }, text: 'Hey everyone, ready for the movie?' },
-    { id: 2, user: { name: 'Beth', avatar: 'https://picsum.photos/seed/beth/40/40' }, text: 'Yeah! So excited for this one.' },
-    { id: 3, user: { name: 'You', avatar: 'https://picsum.photos/seed/you/40/40' }, text: 'I just picked the file. Let me know when you are all ready.' },
-];
+interface ChatProps {
+    roomId: string;
+}
 
-export function Chat() {
-    const [messages, setMessages] = useState<Message[]>(initialMessages);
+export function Chat({ roomId }: ChatProps) {
+    const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const [userId] = useState(() => `user_${uuidv4()}`);
+    const [userName] = useState(() => `User${Math.floor(Math.random() * 1000)}`);
+    const messagesRef = ref(database, `rooms/${roomId}/chat`);
+
+    useEffect(() => {
+        const onMessages = (snapshot: any) => {
+            const data = snapshot.val();
+            if (data) {
+                const messageList = Object.keys(data).map(key => ({
+                    id: key,
+                    ...data[key]
+                })).sort((a, b) => a.timestamp - b.timestamp);
+                setMessages(messageList);
+            }
+        };
+
+        onValue(messagesRef, onMessages);
+
+        return () => {
+            off(messagesRef, 'value', onMessages);
+        };
+    }, [roomId]);
 
     const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
         if (newMessage.trim()) {
-            const msg: Message = {
-                id: messages.length + 1,
-                user: { name: 'You', avatar: 'https://picsum.photos/seed/you/40/40' },
+            const msg = {
+                user: { name: userName, avatar: `https://picsum.photos/seed/${userId}/40/40` },
                 text: newMessage.trim(),
+                timestamp: serverTimestamp()
             };
-            setMessages([...messages, msg]);
+            push(messagesRef, msg);
             setNewMessage('');
         }
     };
@@ -46,7 +70,6 @@ export function Chat() {
             scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
         }
     }, [messages]);
-
 
     return (
         <div className="h-full flex flex-col">
@@ -62,7 +85,7 @@ export function Chat() {
                                 <AvatarFallback>{message.user.name.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1">
-                                <p className="font-semibold text-sm">{message.user.name}</p>
+                                <p className="font-semibold text-sm">{message.user.name === userName ? "You" : message.user.name}</p>
                                 <div className="text-sm bg-secondary p-2 rounded-lg mt-1 w-fit max-w-full">
                                     <p className="break-words">{message.text}</p>
                                 </div>

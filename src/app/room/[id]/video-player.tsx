@@ -5,8 +5,14 @@ import { Play, Pause, Volume2, VolumeX, Maximize, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import { database } from '@/lib/firebase';
+import { ref, onValue, set, off } from 'firebase/database';
 
-export function VideoPlayer() {
+interface VideoPlayerProps {
+  roomId: string;
+}
+
+export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -17,6 +23,64 @@ export function VideoPlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSeeking = useRef(false);
+  const lastSyncTimestamp = useRef(Date.now());
+
+  const roomStateRef = ref(database, `rooms/${roomId}/video`);
+
+  useEffect(() => {
+    if (!roomId) return;
+
+    const onStateChange = (snapshot: any) => {
+      const data = snapshot.val();
+      if (!data) return;
+      
+      const { isPlaying: remoteIsPlaying, progress: remoteProgress, videoSrc: remoteVideoSrc, timestamp } = data;
+      
+      if (Date.now() - lastSyncTimestamp.current < 500) return;
+
+      if (videoRef.current) {
+        if (remoteVideoSrc !== videoSrc) {
+          setVideoSrc(remoteVideoSrc);
+        }
+
+        if (videoRef.current.src !== remoteVideoSrc) {
+          videoRef.current.src = remoteVideoSrc;
+        }
+
+        if (Math.abs(videoRef.current.currentTime - remoteProgress) > 2) {
+            videoRef.current.currentTime = remoteProgress;
+            setProgress(remoteProgress);
+        }
+        
+        if (videoRef.current.paused === remoteIsPlaying) {
+           if (remoteIsPlaying) {
+             videoRef.current.play();
+           } else {
+             videoRef.current.pause();
+           }
+        }
+      } else {
+         if (remoteVideoSrc) {
+            setVideoSrc(remoteVideoSrc);
+         }
+      }
+
+      setIsPlaying(remoteIsPlaying);
+    };
+
+    onValue(roomStateRef, onStateChange);
+
+    return () => {
+      off(roomStateRef, 'value', onStateChange);
+    };
+  }, [roomId, videoSrc]);
+
+
+  const syncState = (state: object) => {
+    lastSyncTimestamp.current = Date.now();
+    set(roomStateRef, { ...state, timestamp: Date.now() });
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -25,16 +89,20 @@ export function VideoPlayer() {
       setVideoSrc(url);
       setIsPlaying(false);
       setProgress(0);
+      syncState({ videoSrc: url, isPlaying: false, progress: 0 });
     }
   };
 
   const togglePlay = () => {
     if (videoRef.current) {
-      if (videoRef.current.paused) {
+      const newIsPlaying = !isPlaying;
+      if (newIsPlaying) {
         videoRef.current.play();
       } else {
         videoRef.current.pause();
       }
+      setIsPlaying(newIsPlaying);
+      syncState({ isPlaying: newIsPlaying, progress: videoRef.current.currentTime, videoSrc });
     }
   };
   
@@ -62,9 +130,11 @@ export function VideoPlayer() {
   
   const handleProgressChange = (value: number[]) => {
     if (videoRef.current) {
+        isSeeking.current = false;
         const newTime = value[0];
         videoRef.current.currentTime = newTime;
         setProgress(newTime);
+        syncState({ isPlaying, progress: newTime, videoSrc });
     }
   };
   
@@ -84,16 +154,36 @@ export function VideoPlayer() {
     const video = videoRef.current;
     if (!video) return;
     
-    const updateProgress = () => setProgress(video.currentTime);
-    const setVideoDuration = () => setDuration(video.duration);
+    const updateProgress = () => {
+      if (!isSeeking.current) {
+        setProgress(video.currentTime);
+      }
+    }
+    const setVideoDuration = () => {
+      if(video.duration !== Infinity) {
+        setDuration(video.duration)
+      }
+    };
     
     video.addEventListener('timeupdate', updateProgress);
     video.addEventListener('loadedmetadata', setVideoDuration);
+    video.addEventListener('durationchange', setVideoDuration);
+    video.addEventListener('play', () => {
+      setIsPlaying(true);
+      syncState({ isPlaying: true, progress: video.currentTime, videoSrc });
+    });
+    video.addEventListener('pause', () => {
+      setIsPlaying(false);
+      syncState({ isPlaying: false, progress: video.currentTime, videoSrc });
+    });
     
     return () => {
       video.removeEventListener('timeupdate', updateProgress);
       video.removeEventListener('loadedmetadata', setVideoDuration);
-      if (videoSrc) URL.revokeObjectURL(videoSrc);
+      video.removeEventListener('durationchange', setVideoDuration);
+       video.removeEventListener('play', () => setIsPlaying(true));
+      video.removeEventListener('pause', () => setIsPlaying(false));
+      if (videoSrc && videoSrc.startsWith('blob:')) URL.revokeObjectURL(videoSrc);
     };
   }, [videoSrc]);
 
@@ -134,7 +224,7 @@ export function VideoPlayer() {
 
   return (
     <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <video ref={videoRef} src={videoSrc} className="w-full h-full object-contain" onClick={togglePlay} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
+      <video ref={videoRef} src={videoSrc} className="w-full h-full object-contain" onClick={togglePlay} />
       <div className={cn("absolute inset-0 bg-black/20 transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0", "pointer-events-none")} />
       <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0")}>
         <div className="flex flex-col gap-2">
@@ -144,7 +234,11 @@ export function VideoPlayer() {
                     value={[progress]}
                     max={duration}
                     step={1}
-                    onValueChange={handleProgressChange}
+                    onValueChange={(value) => {
+                      isSeeking.current = true;
+                      setProgress(value[0]);
+                    }}
+                    onValueCommit={handleProgressChange}
                     className="flex-1"
                 />
                 <span className="text-xs font-mono text-white">{formatTime(duration)}</span>

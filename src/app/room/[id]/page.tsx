@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/co
 import { Button } from '@/components/ui/button';
 
 export default function RoomPage({ params }: { params: { id: string } }) {
+  const roomId = params.id;
   return (
     <div className="flex h-screen max-h-screen bg-background text-foreground overflow-hidden relative">
       <main className="flex-1 flex flex-col p-2 md:p-4 gap-4">
@@ -13,7 +14,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             <div className="flex items-center gap-2">
                 <Clapperboard className="w-6 h-6 text-primary" />
                 <h1 className="text-lg md:text-xl font-semibold">
-                  Room: <span className="font-mono text-primary bg-white/10 px-2 py-1 rounded-md">{params.id}</span>
+                  Room: <span className="font-mono text-primary bg-white/10 px-2 py-1 rounded-md">{roomId}</span>
                 </h1>
             </div>
             <div className="flex items-center gap-4">
@@ -33,7 +34,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
                         <SheetTitle>Chat & Tools</SheetTitle>
                      </SheetHeader>
                      <div className="flex-1 min-h-0">
-                        <Chat />
+                        <Chat roomId={roomId} />
                       </div>
                       <div className="border-t border-border">
                         <ContentSuggester />
@@ -44,12 +45,12 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             </div>
         </header>
         <div className="flex-1 w-full h-full min-h-0 rounded-lg overflow-hidden">
-          <VideoPlayer />
+          <VideoPlayer roomId={roomId} />
         </div>
       </main>
       <aside className="w-[350px] bg-card border-l border-border flex-col hidden md:flex">
         <div className="flex-1 min-h-0">
-          <Chat />
+          <Chat roomId={roomId} />
         </div>
         <div className="border-t border-border">
           <ContentSuggester />
