@@ -13,17 +13,22 @@ interface VideoPlayerProps {
   roomId: string;
 }
 
+interface RoomState {
+  fileName: string | null;
+  isPlaying: boolean;
+  progress: number;
+}
+
 export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isLoadingVideo, setIsLoadingVideo] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -35,22 +40,19 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
 
   useEffect(() => {
     const onStateChange = (snapshot: any) => {
-      const data = snapshot.val();
-      setIsLoadingVideo(false);
-      if (!data) return;
-
-      if (data.videoSrc && data.videoSrc !== videoSrc) {
-        setVideoSrc(data.videoSrc);
+      const data: RoomState | null = snapshot.val();
+      setIsLoading(false);
+      
+      if (!data?.fileName) {
+        setVideoSrc(null);
+        setFileName(null);
+        return;
       }
       
-      if (!data.videoSrc && videoSrc) {
-        setVideoSrc(null);
-      }
-
-      if (videoRef.current) {
+      if (videoRef.current && fileName === data.fileName) {
         const serverTime = data.progress ?? 0;
         const clientTime = videoRef.current.currentTime;
-        if (Math.abs(serverTime - clientTime) > 2) {
+        if (Math.abs(serverTime - clientTime) > 2) { // Sync if more than 2s difference
           videoRef.current.currentTime = serverTime;
         }
 
@@ -67,11 +69,14 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     onValue(roomStateRef, onStateChange);
     return () => {
       off(roomStateRef, 'value', onStateChange);
+      if (videoSrc) {
+        URL.revokeObjectURL(videoSrc);
+      }
     };
-  }, [roomId]);
+  }, [roomId, fileName, videoSrc]);
 
 
-  const syncState = (state: object) => {
+  const syncState = (state: Partial<RoomState>) => {
     if (Date.now() - lastSyncTimestamp.current > 250) {
         update(roomStateRef, state);
         lastSyncTimestamp.current = Date.now();
@@ -81,27 +86,13 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadstart = () => {
-        setIsUploading(true);
-        setUploadProgress(0);
-      };
-      reader.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percentLoaded = Math.round((event.loaded / event.total) * 100);
-          setUploadProgress(percentLoaded);
-        }
-      };
-      reader.onload = (e) => {
-        const base64 = e.target?.result as string;
-        set(roomStateRef, { videoSrc: base64, isPlaying: false, progress: 0 });
-        setIsUploading(false);
-      };
-      reader.onerror = () => {
-        setIsUploading(false);
-        console.error("File could not be read");
+      if (videoSrc) {
+          URL.revokeObjectURL(videoSrc);
       }
-      reader.readAsDataURL(file);
+      const newVideoSrc = URL.createObjectURL(file);
+      setVideoSrc(newVideoSrc);
+      setFileName(file.name);
+      set(roomStateRef, { fileName: file.name, isPlaying: false, progress: 0 });
     }
   };
 
@@ -223,7 +214,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
   
-  if (isLoadingVideo) {
+  if (isLoading) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Loader2 className="w-16 h-16 text-primary animate-spin" />
@@ -236,26 +227,15 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   if (!videoSrc) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
-        {isUploading ? (
-          <>
-            <Loader2 className="w-16 h-16 text-primary animate-spin" />
-            <h2 className="text-2xl font-bold">Uploading Video...</h2>
-            <p className="text-muted-foreground max-w-sm">Please wait while the video is being prepared for everyone.</p>
-            <Progress value={uploadProgress} className="w-full max-w-sm mt-4" />
-          </>
-        ) : (
-          <>
-            <Film className="w-16 h-16 text-muted-foreground" />
-            <h2 className="text-2xl font-bold">Select a video to start</h2>
-            <p className="text-muted-foreground max-w-sm">Choose a video file to begin the watch party. This will be uploaded to sync with everyone.</p>
-            <Button asChild className="mt-4">
-              <label htmlFor="video-upload" className="cursor-pointer">
-                Choose Video File
-              </label>
-            </Button>
-            <input id="video-upload" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
-          </>
-        )}
+        <Film className="w-16 h-16 text-muted-foreground" />
+        <h2 className="text-2xl font-bold">Select a video to start</h2>
+        <p className="text-muted-foreground max-w-sm">Choose a video file to begin the watch party. Playback will sync with others who load the same file.</p>
+        <Button asChild className="mt-4">
+          <label htmlFor="video-upload" className="cursor-pointer">
+            Choose Video File
+          </label>
+        </Button>
+        <input id="video-upload" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
       </div>
     );
   }
