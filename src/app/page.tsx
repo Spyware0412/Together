@@ -28,7 +28,7 @@ export default function Home() {
         </CardContent>
       </Card>
       <footer className="absolute bottom-4 text-center text-xs text-muted-foreground">
-        <p>built for manoshi</p>
+        <p>Build for Manoshi</p>
       </footer>
     </main>
   );
