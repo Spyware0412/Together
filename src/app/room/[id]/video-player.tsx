@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   Settings,
   Upload,
+  Search,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -45,6 +47,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 
 interface VideoPlayerProps {
   roomId: string;
@@ -62,15 +66,22 @@ interface SubtitleSettings {
   position: number;
 }
 
+interface SubtitleSearchResult {
+  language: string;
+  url: string;
+
+  fileName: string;
+}
+
+
 // Helper function to convert SRT subtitles to VTT format
 const srtToVtt = (srtText: string): string => {
   let vtt = "WEBVTT\n\n";
-  const srtLines = srtText.trim().split(/\r?\n/);
+  const srtLines = srtText.trim().replace(/\r/g, '').split('\n');
 
   let i = 0;
   while (i < srtLines.length) {
-    // Skip empty lines and sequence number
-    if (srtLines[i].trim().match(/^\d+$/) && srtLines[i+1]?.includes('-->')) {
+    if (srtLines[i].match(/^\d+$/) && srtLines[i+1]?.includes('-->')) {
       const timeLine = srtLines[i+1].replace(/,/g, '.');
       vtt += timeLine + "\n";
       i += 2;
@@ -109,6 +120,11 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     color: "#FFFFFF",
     position: 5,
   });
+
+  const [subtitleSearchQuery, setSubtitleSearchQuery] = useState("");
+  const [subtitleSearchResults, setSubtitleSearchResults] = useState<SubtitleSearchResult[]>([]);
+  const [isSearchingSubtitles, setIsSearchingSubtitles] = useState(false);
+
 
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
 
@@ -178,6 +194,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       const newVideoSrc = URL.createObjectURL(file);
       setVideoSrc(newVideoSrc);
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
+      setSubtitleSearchQuery(cleanFileName);
       setFileName(file.name);
       
       set(roomStateRef, {
@@ -188,6 +205,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       if (videoRef.current) videoRef.current.currentTime = 0;
       setProgress(0);
       setSelectedTextTrack("off");
+      setSubtitleSearchResults([]);
     }
   };
 
@@ -246,9 +264,9 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     }
   };
   
-  const addTrackToVideo = (trackUrl: string, label: string) => {
+  const addTrackToVideo = (trackUrl: string, label: string, isExternal = true) => {
     if (!videoRef.current) return;
-    const trackId = `external-${label}`;
+    const trackId = `${isExternal ? 'external-' : ''}${label}`;
     
     const oldTrackEl = playerRef.current?.querySelector(`track[id="${trackId}"]`);
     if(oldTrackEl) oldTrackEl.remove();
@@ -261,11 +279,46 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     trackElement.src = trackUrl;
     
     videoRef.current.appendChild(trackElement);
-    externalSubtitlesRef.current.set(trackId, trackUrl);
+    if(isExternal) {
+      externalSubtitlesRef.current.set(trackId, trackUrl);
+    }
+    
+    setTimeout(() => {
+        loadTracks();
+        setSelectedTextTrack(label);
+        toast({ title: "Success", description: "Subtitle file loaded."});
+    }, 100);
+  }
 
-    loadTracks();
-    setSelectedTextTrack(label);
-    toast({ title: "Success", description: "Subtitle file loaded."});
+  const searchForSubtitles = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!subtitleSearchQuery) return;
+      setIsSearchingSubtitles(true);
+      setSubtitleSearchResults([]);
+      try {
+        const res = await fetch(`/api/subtitles?query=${encodeURIComponent(subtitleSearchQuery)}`);
+        const subs: SubtitleSearchResult[] | {error: string} = await res.json();
+        
+        if (res.ok && Array.isArray(subs)) {
+            setSubtitleSearchResults(subs);
+            if (subs.length === 0) {
+              toast({ variant: 'destructive', title: 'No Subtitles Found', description: 'Could not find any subtitles for this query.' });
+            }
+        } else {
+            const error = Array.isArray(subs) ? {error: 'Unknown error'} : subs;
+            toast({ variant: 'destructive', title: 'Error Searching Subtitles', description: error.error });
+        }
+      } catch (err) {
+        console.error("Subtitle search failed:", err);
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to search for subtitles.' });
+      } finally {
+        setIsSearchingSubtitles(false);
+      }
+  }
+
+  const loadOnlineSubtitle = (subtitle: SubtitleSearchResult) => {
+    addTrackToVideo(subtitle.url, subtitle.fileName, false);
+    setSubtitleSearchResults([]); // Clear results after loading
   }
 
   const togglePlay = () => {
@@ -495,7 +548,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                     <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Settings /></Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80" align="end">
+                    <PopoverContent className="w-96" align="end">
                         <div className="grid gap-4">
                             <div className="grid gap-2">
                                 <Label className="font-medium leading-none">Subtitles</Label>
@@ -509,10 +562,41 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                     </SelectContent>
                                 </Select>
                                 <div className="flex items-center gap-2 pt-1">
-                                    <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload</label></Button>
+                                    <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload File</label></Button>
                                     <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
                                 </div>
                             </div>
+                            <Separator/>
+                             <div className="grid gap-2">
+                                <Label className="font-medium leading-none">Search Subtitles Online</Label>
+                                <form onSubmit={searchForSubtitles} className="flex gap-2">
+                                    <Input 
+                                        placeholder="e.g., Inception"
+                                        value={subtitleSearchQuery}
+                                        onChange={(e) => setSubtitleSearchQuery(e.target.value)}
+                                        className="bg-input"
+                                    />
+                                    <Button type="submit" size="icon" disabled={isSearchingSubtitles}>
+                                        {isSearchingSubtitles ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4" />}
+                                    </Button>
+                                </form>
+                                {subtitleSearchResults.length > 0 && (
+                                    <ScrollArea className="h-40 mt-2 border rounded-md">
+                                        <div className="p-2 space-y-2">
+                                        {subtitleSearchResults.map((sub, i) => (
+                                            <div key={i} className="flex justify-between items-center gap-2">
+                                                <div className="flex-1 truncate">
+                                                    <Badge variant="outline">{sub.language}</Badge>
+                                                    <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
+                                                </div>
+                                                <Button size="sm" variant="ghost" onClick={() => loadOnlineSubtitle(sub)}><Download className="w-4 h-4 mr-2"/>Load</Button>
+                                            </div>
+                                        ))}
+                                        </div>
+                                    </ScrollArea>
+                                )}
+                            </div>
+
                             {selectedTextTrack !== "off" && (
                               <>
                                 <Separator />
