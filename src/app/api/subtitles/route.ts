@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { gunzipSync } from 'zlib';
 
 interface SubtitleFile {
   file_id: number;
@@ -11,6 +12,10 @@ interface Subtitle {
   attributes: {
     language: string;
     files: SubtitleFile[];
+    download_count: number;
+    feature_details: {
+        movie_name: string;
+    }
   };
 }
 
@@ -31,7 +36,6 @@ const srtToVtt = (srtText: string): string => {
   let i = 0;
   while (i < srtLines.length) {
     // A valid SRT block starts with a number, followed by a timestamp.
-    // Some SRT files might have extra newlines, so we check for the timestamp on the next line.
     if (srtLines[i].match(/^\d+$/) && srtLines[i+1]?.includes('-->')) {
       const timeLine = srtLines[i+1].replace(/,/g, '.');
       vtt += timeLine + "\n";
@@ -74,7 +78,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(query)}&per_page=20`, {
+    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(query)}&per_page=40`, {
       headers: { 'Api-Key': apiKey, 'Accept': 'application/json' },
     });
     
@@ -88,10 +92,13 @@ export async function GET(request: NextRequest) {
 
     if (!searchData.data || searchData.data.length === 0) {
       cache.set(cacheKey, { data: [], timestamp: Date.now() });
-      return NextResponse.json({ error: 'No subtitles found' }, { status: 404 });
+      return NextResponse.json([]);
     }
 
-    const downloadPromises = searchData.data.map(async (sub: Subtitle) => {
+    // Sort by download count to get more reliable subtitles first
+    const sortedSubs = searchData.data.sort((a: Subtitle, b: Subtitle) => b.attributes.download_count - a.attributes.download_count);
+
+    const downloadPromises = sortedSubs.map(async (sub: Subtitle) => {
       try {
         if (!sub.attributes.files || sub.attributes.files.length === 0) {
             return null;
@@ -99,15 +106,11 @@ export async function GET(request: NextRequest) {
 
         const fileId = sub.attributes.files[0].file_id;
         const language = sub.attributes.language;
-        const originalFileName = sub.attributes.files[0].file_name;
+        let originalFileName = sub.attributes.files[0].file_name || `${sub.attributes.feature_details.movie_name}.${language}.srt`;
 
         const downloadReqRes = await fetch('https://api.opensubtitles.com/api/v1/download', {
           method: 'POST',
-          headers: {
-            'Api-Key': apiKey,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
+          headers: { 'Api-Key': apiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify({ file_id: fileId }),
         });
         
@@ -130,7 +133,16 @@ export async function GET(request: NextRequest) {
             return null;
         }
 
-        const subtitleText = await subtitleContentRes.text();
+        let subtitleText: string;
+        const isCompressed = downloadUrl.includes(".gz");
+
+        if (isCompressed) {
+            const arrayBuffer = await subtitleContentRes.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            subtitleText = gunzipSync(buffer).toString("utf-8");
+        } else {
+            subtitleText = await subtitleContentRes.text();
+        }
         
         let vttText = subtitleText;
         let finalFileName = originalFileName;
@@ -157,16 +169,17 @@ export async function GET(request: NextRequest) {
     const successfulSubs = (await Promise.all(downloadPromises)).filter((s): s is FormattedSubtitle => s !== null);
     
     if (successfulSubs.length === 0) {
-      return NextResponse.json({ error: 'No subtitles could be processed' }, { status: 404 });
+      cache.set(cacheKey, { data: [], timestamp: Date.now() });
+      return NextResponse.json([]);
     }
     
     let filteredSubs = successfulSubs;
 
-    const englishSubs = successfulSubs.filter((s) => s.language === "en");
-    if (englishSubs.length > 0) {
-        const otherSubs = successfulSubs.filter((s) => s.language !== "en");
-        filteredSubs = [...englishSubs, ...otherSubs];
-    }
+    const englishSubs = successfulSubs.filter((s) => s.language === "eng");
+    const otherSubs = successfulSubs.filter((s) => s.language !== "eng");
+
+    // Combine them with English subs first
+    filteredSubs = [...englishSubs, ...otherSubs];
 
     cache.set(cacheKey, { data: filteredSubs, timestamp: Date.now() });
 
