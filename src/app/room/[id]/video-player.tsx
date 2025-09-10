@@ -69,7 +69,6 @@ interface SubtitleSettings {
 interface SubtitleSearchResult {
   language: string;
   url: string;
-
   fileName: string;
 }
 
@@ -217,13 +216,11 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       const availableTextTracks = Array.from(video.textTracks);
       setTextTracks(availableTextTracks);
 
-      if (selectedTextTrack === 'off') {
-        const firstSub = availableTextTracks.find(t => t.kind === 'subtitles' && t.mode !== 'disabled');
-        if (firstSub) {
-            availableTextTracks.forEach(t => t.mode = 'hidden');
-            firstSub.mode = 'showing';
-            setSelectedTextTrack(firstSub.label || `track-${firstSub.language}`);
-        }
+      const firstSub = availableTextTracks.find(t => t.kind === 'subtitles');
+      if (firstSub && selectedTextTrack === 'off') {
+        availableTextTracks.forEach(t => t.mode = 'hidden');
+        firstSub.mode = 'showing';
+        setSelectedTextTrack(firstSub.label || `track-${firstSub.language}`);
       } else {
         availableTextTracks.forEach(track => {
             track.mode = (track.label === selectedTextTrack || track.id === selectedTextTrack) ? 'showing' : 'hidden';
@@ -254,17 +251,17 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
             const vttText = srtToVtt(srtText);
             const blob = new Blob([vttText], { type: 'text/vtt' });
             const trackUrl = URL.createObjectURL(blob);
-            addTrackToVideo(trackUrl, file.name.replace('.srt', '.vtt'));
+            addTrackToVideo(trackUrl, file.name.replace('.srt', '.vtt'), 'en');
           };
           reader.readAsText(file);
         } else {
           const trackUrl = URL.createObjectURL(file);
-          addTrackToVideo(trackUrl, file.name);
+          addTrackToVideo(trackUrl, file.name, 'en');
         }
     }
   };
   
-  const addTrackToVideo = (trackUrl: string, label: string, isExternal = true) => {
+  const addTrackToVideo = (trackUrl: string, label: string, language: string, isExternal = true) => {
     if (!videoRef.current) return;
     const trackId = `${isExternal ? 'external-' : ''}${label}`;
     
@@ -275,7 +272,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     trackElement.id = trackId;
     trackElement.kind = 'subtitles';
     trackElement.label = label;
-    trackElement.srclang = 'en';
+    trackElement.srclang = language;
     trackElement.src = trackUrl;
     
     videoRef.current.appendChild(trackElement);
@@ -317,7 +314,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   }
 
   const loadOnlineSubtitle = (subtitle: SubtitleSearchResult) => {
-    addTrackToVideo(subtitle.url, subtitle.fileName, false);
+    addTrackToVideo(subtitle.url, subtitle.fileName, subtitle.language, false);
     setSubtitleSearchResults([]); // Clear results after loading
   }
 
@@ -645,3 +642,5 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     </div>
   );
 }
+
+    
