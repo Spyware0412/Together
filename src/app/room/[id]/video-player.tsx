@@ -14,6 +14,7 @@ import {
   Settings,
   Upload,
   Languages,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -60,12 +61,14 @@ interface RoomState {
 interface SubtitleSettings {
   fontSize: number;
   color: string;
-  position: number; // As a percentage from the bottom
+  position: number;
 }
 
 interface Subtitle {
   language: string;
   url: string;
+  movieName: string;
+  fileName: string;
 }
 
 export function VideoPlayer({ roomId }: VideoPlayerProps) {
@@ -80,19 +83,19 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const [showControls, setShowControls] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
-  // New state for advanced features
   const { toast } = useToast();
   const [textTracks, setTextTracks] = useState<TextTrack[]>([]);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [selectedTextTrack, setSelectedTextTrack] = useState<string>("off");
   const [selectedAudioTrack, setSelectedAudioTrack] = useState<string>("");
   const [subtitleSettings, setSubtitleSettings] = useState<SubtitleSettings>({
-    fontSize: 1, // as rem
+    fontSize: 1,
     color: "#FFFFFF",
-    position: 5, // as percentage
+    position: 5,
   });
   const [isSearchingSubtitles, setIsSearchingSubtitles] = useState(false);
   const [onlineSubtitles, setOnlineSubtitles] = useState<Subtitle[]>([]);
+  const [subtitleSearchQuery, setSubtitleSearchQuery] = useState("");
 
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
 
@@ -107,9 +110,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
   const userStatusRef = ref(database, `rooms/${roomId}/users/${userId}`);
 
-  // -------------------------------
-  // Firebase sync
-  // -------------------------------
   useEffect(() => {
     set(userStatusRef, { online: true, last_seen: serverTimestamp() });
     onDisconnect(userStatusRef).remove();
@@ -155,9 +155,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       update(roomStateRef, state);
   }, [roomStateRef]);
 
-  // -------------------------------
-  // File select & track handling
-  // -------------------------------
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -167,7 +164,9 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       
       const newVideoSrc = URL.createObjectURL(file);
       setVideoSrc(newVideoSrc);
+      const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
       setFileName(file.name);
+      setSubtitleSearchQuery(cleanFileName);
       
       set(roomStateRef, {
         fileName: file.name,
@@ -185,32 +184,37 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     if (!videoRef.current) return;
     const video = videoRef.current;
     
-    // Text Tracks
-    const availableTextTracks = Array.from(video.textTracks);
-    setTextTracks(availableTextTracks);
-    // Auto-enable first subtitle track if available
-    const firstSub = availableTextTracks.find(t => t.kind === 'subtitles');
-    if (firstSub) {
-      firstSub.mode = 'showing';
-      // Use label as the value, it's more reliable for selection
-      setSelectedTextTrack(firstSub.label); 
-    } else {
-      setSelectedTextTrack('off');
-    }
+    // Using a timeout to give tracks time to load, especially external ones
+    setTimeout(() => {
+      const availableTextTracks = Array.from(video.textTracks);
+      setTextTracks(availableTextTracks);
 
-    // Audio Tracks
-    if (video.audioTracks) {
-        const availableAudioTracks = Array.from(video.audioTracks);
-        setAudioTracks(availableAudioTracks);
-        const enabledAudioTrack = availableAudioTracks.find(t => t.enabled);
-        if(enabledAudioTrack) {
-            setSelectedAudioTrack(enabledAudioTrack.id);
-        } else if (availableAudioTracks.length > 0) {
-            availableAudioTracks[0].enabled = true;
-            setSelectedAudioTrack(availableAudioTracks[0].id);
+      if (selectedTextTrack === 'off') {
+        const firstSub = availableTextTracks.find(t => t.kind === 'subtitles' && t.mode !== 'disabled');
+        if (firstSub) {
+            availableTextTracks.forEach(t => t.mode = 'hidden');
+            firstSub.mode = 'showing';
+            setSelectedTextTrack(firstSub.label || `track-${firstSub.language}`);
         }
-    }
-  }, []);
+      } else {
+        availableTextTracks.forEach(track => {
+            track.mode = (track.label === selectedTextTrack || track.id === selectedTextTrack) ? 'showing' : 'hidden';
+        });
+      }
+
+      if (video.audioTracks) {
+          const availableAudioTracks = Array.from(video.audioTracks);
+          setAudioTracks(availableAudioTracks);
+          const enabledAudioTrack = availableAudioTracks.find(t => t.enabled);
+          if(enabledAudioTrack) {
+              setSelectedAudioTrack(enabledAudioTrack.id);
+          } else if (availableAudioTracks.length > 0) {
+              availableAudioTracks[0].enabled = true;
+              setSelectedAudioTrack(availableAudioTracks[0].id);
+          }
+      }
+    }, 500);
+  }, [selectedTextTrack]);
 
   const handleSubtitleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -218,7 +222,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
         const trackUrl = URL.createObjectURL(file);
         const trackId = `external-${file.name}`;
         
-        // Remove old track if it exists
         const oldTrackEl = playerRef.current?.querySelector(`track[id="${trackId}"]`);
         if(oldTrackEl) oldTrackEl.remove();
 
@@ -226,26 +229,20 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
         trackElement.id = trackId;
         trackElement.kind = 'subtitles';
         trackElement.label = file.name;
-        trackElement.srclang = 'en'; // default lang
+        trackElement.srclang = 'en';
         trackElement.src = trackUrl;
         
         videoRef.current.appendChild(trackElement);
         externalSubtitlesRef.current.set(trackId, trackUrl);
 
-        setTimeout(() => { // give it a moment to load
-            loadTracks();
-            setSelectedTextTrack(file.name);
-            toast({ title: "Success", description: "Subtitle file loaded."});
-        }, 500);
+        loadTracks();
+        setSelectedTextTrack(file.name);
+        toast({ title: "Success", description: "Subtitle file loaded."});
     }
   };
 
-  // -------------------------------
-  // Player controls
-  // -------------------------------
   const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (fileName !== roomState?.fileName) return;
+    if (!videoRef.current || fileName !== roomState?.fileName) return;
     syncState({ isPlaying: videoRef.current.paused });
   };
 
@@ -264,9 +261,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       const newMuted = !isMuted;
       videoRef.current.muted = newMuted;
       setIsMuted(newMuted);
-      if (!newMuted && volume === 0) {
-        handleVolumeChange([0.5]);
-      }
+      if (!newMuted && volume === 0) handleVolumeChange([0.5]);
     }
   };
 
@@ -296,10 +291,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       }
     }
   };
-
-  // -------------------------------
-  // Advanced Feature Handlers
-  // -------------------------------
+  
   useEffect(() => {
     textTracks.forEach((track) => {
         track.mode = (track.label === selectedTextTrack || track.id === selectedTextTrack) ? 'showing' : 'hidden';
@@ -316,58 +308,55 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
             if (enabledTrack) setSelectedAudioTrack(enabledTrack.id);
         };
         videoRef.current.audioTracks.addEventListener('change', handleAudioTrackChange);
-        return () => {
-            videoRef.current?.audioTracks.removeEventListener('change', handleAudioTrackChange);
-        }
+        return () => videoRef.current?.audioTracks.removeEventListener('change', handleAudioTrackChange);
     }
   }, [videoSrc]);
 
 
   const handleAudioTrackChange = (trackId: string) => {
-    audioTracks.forEach((track) => {
-        track.enabled = track.id === trackId;
-    });
+    audioTracks.forEach((track) => { track.enabled = track.id === trackId; });
     setSelectedAudioTrack(trackId);
   };
   
-  // Apply subtitle styles via CSS Custom Properties
   useEffect(() => {
-    const styleElement = document.createElement('style');
-    styleElement.id = 'cinesync-subtitle-styles';
-    document.head.appendChild(styleElement);
-
+    const styleId = 'cinesync-subtitle-styles';
+    let styleElement = document.getElementById(styleId) as HTMLStyleElement;
+    if (!styleElement) {
+        styleElement = document.createElement('style');
+        styleElement.id = styleId;
+        document.head.appendChild(styleElement);
+    }
+    
     const sheet = styleElement.sheet;
     if (sheet) {
-        const css = `
+        if (sheet.cssRules.length > 0) sheet.deleteRule(0);
+        sheet.insertRule(`
         ::cue {
           font-size: ${subtitleSettings.fontSize}rem !important;
           color: ${subtitleSettings.color} !important;
           background-color: rgba(0, 0, 0, 0.7) !important;
           bottom: ${subtitleSettings.position}% !important;
         }
-      `;
-        // Clear existing rules and add new one
-        if (sheet.cssRules.length > 0) {
-            sheet.deleteRule(0);
-        }
-        sheet.insertRule(css, 0);
+      `, 0);
     }
-    return () => {
-      document.getElementById('cinesync-subtitle-styles')?.remove();
-    };
   }, [subtitleSettings]);
 
   const searchForSubtitles = async () => {
-    if (!fileName) return;
+    const query = subtitleSearchQuery.trim() || fileName;
+    if (!query) {
+      toast({ variant: "destructive", title: "Error", description: "No filename or search query to look for." });
+      return;
+    }
+
     setIsSearchingSubtitles(true);
     setOnlineSubtitles([]);
     try {
-      const res = await fetch(`/api/subtitles?query=${encodeURIComponent(fileName)}`);
+      const res = await fetch(`/api/subtitles?query=${encodeURIComponent(query)}`);
       if (!res.ok) throw new Error("Failed to fetch subtitles");
       const subs: Subtitle[] = await res.json();
       setOnlineSubtitles(subs);
       if (subs.length === 0) {
-        toast({ title: "No subtitles found", description: "Couldn't find any online subtitles for this file." });
+        toast({ title: "No subtitles found", description: "Couldn't find any online subtitles for this query." });
       }
     } catch (error) {
       console.error(error);
@@ -384,46 +373,35 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     const trackElement = document.createElement('track');
     trackElement.id = trackId;
     trackElement.kind = 'subtitles';
-    trackElement.label = `Online - ${subtitle.language}`;
+    trackElement.label = `${subtitle.movieName} (${subtitle.language})`;
     trackElement.srclang = subtitle.language.slice(0, 2).toLowerCase();
     trackElement.src = subtitle.url;
     trackElement.default = true;
 
     videoRef.current.appendChild(trackElement);
     
-    setTimeout(() => {
-        loadTracks();
-        setSelectedTextTrack(trackElement.label);
-        toast({ title: "Success", description: `${subtitle.language} subtitles loaded.`});
-        setOnlineSubtitles([]); // Hide list after selection
-    }, 500);
+    loadTracks();
+    setSelectedTextTrack(trackElement.label);
+    toast({ title: "Success", description: `${subtitle.language} subtitles loaded.`});
+    setOnlineSubtitles([]);
   };
 
-
-  // -------------------------------
-  // Local video event listeners
-  // -------------------------------
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const onPlay = () => syncState({ isPlaying: true });
-    const onPause = () => {
-        if (!isSeeking.current) syncState({ isPlaying: false });
-    };
+    const onPause = () => !isSeeking.current && syncState({ isPlaying: false });
     const onTimeUpdate = () => {
-      if (!isSeeking.current) {
-        const currentTime = video.currentTime;
-        setProgress(currentTime);
-        if (Date.now() - lastSyncTimestamp.current > 3000) {
-          syncState({ progress: currentTime });
-          lastSyncTimestamp.current = Date.now();
-        }
+      if (isSeeking.current) return;
+      const currentTime = video.currentTime;
+      setProgress(currentTime);
+      if (Date.now() - lastSyncTimestamp.current > 3000) {
+        syncState({ progress: currentTime });
+        lastSyncTimestamp.current = Date.now();
       }
     };
-    const onDurationChange = () => {
-      if (video.duration !== Infinity) setDuration(video.duration);
-    };
+    const onDurationChange = () => video.duration !== Infinity && setDuration(video.duration);
 
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
@@ -442,18 +420,13 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     };
   }, [videoSrc, syncState, loadTracks]);
 
-  // -------------------------------
-  // UI behavior
-  // -------------------------------
   const handleMouseMove = () => {
     setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
   };
 
-  const handleMouseLeave = () => {
-    if (roomState?.isPlaying) setShowControls(false);
-  };
+  const handleMouseLeave = () => { if (roomState?.isPlaying) setShowControls(false); };
 
   const formatTime = (time: number) => {
     if (isNaN(time)) return "0:00";
@@ -462,9 +435,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  // -------------------------------
-  // Render states
-  // -------------------------------
   if (isLoading) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
@@ -488,7 +458,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
           )}
         </p>
         <Button asChild className="mt-4"><label htmlFor="video-upload" className="cursor-pointer">Choose Video File</label></Button>
-        <input id="video-upload" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
+        <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
       </div>
     );
   }
@@ -496,9 +466,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const isPlaybackDisabled = fileName !== roomState?.fileName;
   if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
 
-  // -------------------------------
-  // Final UI
-  // -------------------------------
   return (
     <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
       <video ref={videoRef} src={videoSrc} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" />
@@ -513,7 +480,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
             </AlertDescription>
             <div className="mt-4">
               <Button asChild variant="secondary"><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Correct Video File</label></Button>
-              <input id="video-upload-mismatch" type="file" accept="video/*" onChange={handleFileChange} className="hidden" />
+              <input id="video-upload-mismatch" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
             </div>
           </Alert>
         </div>
@@ -562,17 +529,30 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                 <div className="flex items-center gap-2 pt-1">
                                     <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload</label></Button>
                                     <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
-                                    <Button size="sm" variant="outline" onClick={searchForSubtitles} disabled={isSearchingSubtitles}>
+                                    <Button size="sm" variant="outline" onClick={() => searchForSubtitles()} disabled={isSearchingSubtitles}>
                                       {isSearchingSubtitles ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />}
-                                      Search Online
+                                      Online
+                                    </Button>
+                                </div>
+                                <div className="flex items-center gap-2 pt-1">
+                                    <Input 
+                                      placeholder="Manual search..." 
+                                      value={subtitleSearchQuery}
+                                      onChange={(e) => setSubtitleSearchQuery(e.target.value)}
+                                      className="flex-1"
+                                    />
+                                    <Button size="icon" variant="outline" onClick={searchForSubtitles} disabled={isSearchingSubtitles}>
+                                      <Search className="w-4 h-4" />
                                     </Button>
                                 </div>
                                 {onlineSubtitles.length > 0 && (
-                                  <div className="mt-2 space-y-2 max-h-32 overflow-y-auto">
-                                    <Label className="text-xs text-muted-foreground">Select a subtitle to load:</Label>
+                                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
+                                    <p className="text-xs text-muted-foreground mb-2">Select a subtitle to load:</p>
                                     {onlineSubtitles.map((sub, i) => (
-                                      <Button key={i} variant="link" className="p-0 h-auto text-white w-full justify-start" onClick={() => loadOnlineSubtitle(sub)}>
-                                        {sub.language}
+                                      <Button key={i} variant="ghost" className="p-1 h-auto text-white w-full justify-start text-left text-xs" onClick={() => loadOnlineSubtitle(sub)}>
+                                        {sub.movieName} ({sub.language})
+                                        <br/>
+                                        <span className="text-muted-foreground truncate text-xs">{sub.fileName}</span>
                                       </Button>
                                     ))}
                                   </div>
