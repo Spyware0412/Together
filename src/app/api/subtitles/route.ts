@@ -87,9 +87,17 @@ export async function GET(req: Request) {
       .filter(result => result.status === 'fulfilled' && result.value)
       .map(result => (result as PromiseFulfilledResult<any>).value);
 
-    cache.set(cacheKey, { data: successfulSubs, timestamp: Date.now() });
+    // Prefer English first
+    let filteredSubs = successfulSubs.filter((s) => s.language === "en");
 
-    return NextResponse.json(successfulSubs);
+    // fallback if no English found
+    if (filteredSubs.length === 0) {
+      filteredSubs = successfulSubs;
+    }
+
+    cache.set(cacheKey, { data: filteredSubs, timestamp: Date.now() });
+    return NextResponse.json(filteredSubs);
+
   } catch (err) {
     console.error("Error fetching subtitles:", err);
     return NextResponse.json({ error: "Internal server error while fetching subtitles." }, { status: 500 });
