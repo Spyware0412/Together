@@ -173,15 +173,10 @@ export async function GET(request: NextRequest) {
       cache.set(cacheKey, { data: [], timestamp: Date.now() });
       return NextResponse.json([]);
     }
-    
-    const englishSubs = successfulSubs.filter((s) => s.language === "eng");
-    const otherSubs = successfulSubs.filter((s) => s.language !== "eng");
 
-    const filteredSubs = [...englishSubs, ...otherSubs];
+    cache.set(cacheKey, { data: successfulSubs, timestamp: Date.now() });
 
-    cache.set(cacheKey, { data: filteredSubs, timestamp: Date.now() });
-
-    return NextResponse.json(filteredSubs);
+    return NextResponse.json(successfulSubs);
 
   } catch (error) {
     console.error('Error fetching subtitles:', error);
