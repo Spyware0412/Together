@@ -30,6 +30,8 @@ const srtToVtt = (srtText: string): string => {
 
   let i = 0;
   while (i < srtLines.length) {
+    // A valid SRT block starts with a number, followed by a timestamp.
+    // Some SRT files might have extra newlines, so we check for the timestamp on the next line.
     if (srtLines[i].match(/^\d+$/) && srtLines[i+1]?.includes('-->')) {
       const timeLine = srtLines[i+1].replace(/,/g, '.');
       vtt += timeLine + "\n";
@@ -41,11 +43,14 @@ const srtToVtt = (srtText: string): string => {
         i++;
       }
       vtt += text.trim() + "\n\n";
+    } else {
+        // If the line is not a sequence number, skip it.
+        i++;
     }
-    i++;
   }
   return vtt;
 };
+
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -57,6 +62,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!apiKey) {
+    console.error('OpenSubtitles API key is not configured.');
     return NextResponse.json({ error: 'OpenSubtitles API key is not configured' }, { status: 500 });
   }
 
@@ -81,11 +87,16 @@ export async function GET(request: NextRequest) {
     const searchData = await searchRes.json();
 
     if (!searchData.data || searchData.data.length === 0) {
+      cache.set(cacheKey, { data: [], timestamp: Date.now() });
       return NextResponse.json({ error: 'No subtitles found' }, { status: 404 });
     }
 
     const downloadPromises = searchData.data.map(async (sub: Subtitle) => {
       try {
+        if (!sub.attributes.files || sub.attributes.files.length === 0) {
+            return null;
+        }
+
         const fileId = sub.attributes.files[0].file_id;
         const language = sub.attributes.language;
         const originalFileName = sub.attributes.files[0].file_name;
@@ -100,13 +111,24 @@ export async function GET(request: NextRequest) {
           body: JSON.stringify({ file_id: fileId }),
         });
         
-        if (!downloadReqRes.ok) return null;
+        if (!downloadReqRes.ok) {
+            console.warn(`Failed to get download link for file ID ${fileId}`);
+            return null;
+        }
         
         const downloadData = await downloadReqRes.json();
         const downloadUrl = downloadData.link;
 
+        if (!downloadUrl) {
+            console.warn(`No download link in response for file ID ${fileId}`);
+            return null;
+        }
+
         const subtitleContentRes = await fetch(downloadUrl);
-        if (!subtitleContentRes.ok) return null;
+        if (!subtitleContentRes.ok) {
+            console.warn(`Failed to download subtitle content from ${downloadUrl}`);
+            return null;
+        }
 
         const subtitleText = await subtitleContentRes.text();
         
@@ -127,7 +149,7 @@ export async function GET(request: NextRequest) {
           fileName: finalFileName,
         };
       } catch (e) {
-        console.error("Error processing subtitle:", e);
+        console.error("Error processing a single subtitle:", e);
         return null;
       }
     });
