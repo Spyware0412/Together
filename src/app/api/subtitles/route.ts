@@ -57,8 +57,9 @@ const srtToVtt = (srtText: string): string => {
 // Normalize language codes
 const normalizeLang = (lang: string) => {
   if (!lang) return "unknown";
-  if (lang.toLowerCase() === "en" || lang.toLowerCase() === "eng") return "eng";
-  return lang.toLowerCase();
+  const lowerLang = lang.toLowerCase();
+  if (lowerLang === "en" || lowerLang === "eng") return "eng";
+  return lowerLang;
 };
 
 export async function GET(request: NextRequest) {
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Server API keys are not configured' }, { status: 500 });
   }
 
-  const cacheKey = `subtitles_${tmdbId}`;
+  const cacheKey = `subtitles_tmdb_${tmdbId}`;
   const cached = cache.get(cacheKey);
 
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Step 1: Get IMDb ID from TMDb
+    // Step 1: Get IMDb ID from TMDb using the tmdb_id
     const tmdbDetailsRes = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}`, {
         headers: {
             'Authorization': `Bearer ${tmdbApiKey}`,
@@ -93,17 +94,21 @@ export async function GET(request: NextRequest) {
     });
 
     if (!tmdbDetailsRes.ok) {
+        console.error(`TMDb details fetch failed for ID ${tmdbId}:`, tmdbDetailsRes.status, await tmdbDetailsRes.text());
         return NextResponse.json({ error: 'Failed to fetch movie details from TMDb' }, { status: tmdbDetailsRes.status });
     }
     const tmdbDetails = await tmdbDetailsRes.json();
     const imdbId = tmdbDetails.imdb_id;
 
     if (!imdbId) {
+        console.error(`IMDb ID not found for TMDb ID ${tmdbId}`);
         return NextResponse.json({ error: 'IMDb ID not found for this movie on TMDb' }, { status: 404 });
     }
-
-    // Step 2: Search OpenSubtitles using IMDb ID (just the numeric part)
+    
+    // OpenSubtitles expects the numeric part of the IMDb ID
     const imdbIdNumeric = imdbId.replace('tt', '');
+
+    // Step 2: Search OpenSubtitles using the numeric IMDb ID
     const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdbIdNumeric}&per_page=100`, {
       headers: { 'Api-Key': openSubtitlesApiKey, 'Accept': 'application/json' },
     });
@@ -170,9 +175,9 @@ export async function GET(request: NextRequest) {
         let vttText = subtitleText;
         let finalFileName = originalFileName;
 
-        if (originalFileName.toLowerCase().endsWith(".srt") || downloadUrl.toLowerCase().endsWith(".srt")) {
+        if (originalFileName.toLowerCase().endsWith(".srt") || !finalFileName.toLowerCase().endsWith('.vtt')) {
             vttText = srtToVtt(subtitleText);
-            finalFileName = finalFileName.replace(/\.srt$/, ".vtt");
+            finalFileName = finalFileName.replace(/\.[^/.]+$/, "") + ".vtt";
         }
 
         const buffer = Buffer.from(vttText, 'utf-8');
@@ -197,7 +202,6 @@ export async function GET(request: NextRequest) {
     }
 
     cache.set(cacheKey, { data: successfulSubs, timestamp: Date.now() });
-
     return NextResponse.json(successfulSubs);
 
   } catch (error) {
