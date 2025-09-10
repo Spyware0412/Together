@@ -13,8 +13,6 @@ import {
   AlertTriangle,
   Settings,
   Upload,
-  Languages,
-  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -64,13 +62,6 @@ interface SubtitleSettings {
   position: number;
 }
 
-interface Subtitle {
-  language: string;
-  url: string;
-  movieName: string;
-  fileName: string;
-}
-
 // Helper function to convert SRT subtitles to VTT format
 const srtToVtt = (srtText: string): string => {
   let vtt = "WEBVTT\n\n";
@@ -118,9 +109,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     color: "#FFFFFF",
     position: 5,
   });
-  const [isSearchingSubtitles, setIsSearchingSubtitles] = useState(false);
-  const [onlineSubtitles, setOnlineSubtitles] = useState<Subtitle[]>([]);
-  const [subtitleSearchQuery, setSubtitleSearchQuery] = useState("");
 
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
 
@@ -191,7 +179,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       setVideoSrc(newVideoSrc);
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
       setFileName(file.name);
-      setSubtitleSearchQuery(cleanFileName);
       
       set(roomStateRef, {
         fileName: file.name,
@@ -201,7 +188,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       if (videoRef.current) videoRef.current.currentTime = 0;
       setProgress(0);
       setSelectedTextTrack("off");
-      setOnlineSubtitles([]);
     }
   };
 
@@ -209,7 +195,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     if (!videoRef.current) return;
     const video = videoRef.current;
     
-    // Using a timeout to give tracks time to load, especially external ones
     setTimeout(() => {
       const availableTextTracks = Array.from(video.textTracks);
       setTextTracks(availableTextTracks);
@@ -383,56 +368,6 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     }
   }, [subtitleSettings]);
 
-  const searchForSubtitles = async () => {
-    const query = subtitleSearchQuery.trim() || fileName;
-    if (!query) {
-      toast({ variant: "destructive", title: "Error", description: "No filename or search query to look for." });
-      return;
-    }
-
-    setIsSearchingSubtitles(true);
-    setOnlineSubtitles([]);
-    try {
-      const res = await fetch(`/api/subtitles?query=${encodeURIComponent(query)}`);
-      if (!res.ok) throw new Error("Failed to fetch subtitles");
-      const subs: Subtitle[] = await res.json();
-      setOnlineSubtitles(subs);
-      if (subs.length === 0) {
-        toast({ title: "No subtitles found", description: "Couldn't find any online subtitles for this query." });
-      }
-    } catch (error) {
-      console.error(error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to search for subtitles." });
-    } finally {
-      setIsSearchingSubtitles(false);
-    }
-  };
-
-  const loadOnlineSubtitle = async (subtitle: Subtitle) => {
-    if (!videoRef.current) return;
-    setIsSearchingSubtitles(true);
-    try {
-      const srtRes = await fetch(subtitle.url);
-      if (!srtRes.ok) throw new Error("Failed to download subtitle file.");
-
-      const srt = await srtRes.text();
-      const vtt = srtToVtt(srt);
-      const blob = new Blob([vtt], { type: "text/vtt" });
-      const trackUrl = URL.createObjectURL(blob);
-
-      const label = `${subtitle.movieName} (${subtitle.language})`;
-      addTrackToVideo(trackUrl, label);
-
-      toast({ title: "Success", description: `${subtitle.language} subtitles loaded.`});
-      setOnlineSubtitles([]); // Hide list after selection
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Error", description: "Could not load selected subtitle." });
-    } finally {
-      setIsSearchingSubtitles(false);
-    }
-  };
-
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -576,36 +511,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                 <div className="flex items-center gap-2 pt-1">
                                     <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload</label></Button>
                                     <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
-                                    <Button size="sm" variant="outline" onClick={searchForSubtitles} disabled={isSearchingSubtitles}>
-                                      {isSearchingSubtitles ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />}
-                                      Online
-                                    </Button>
                                 </div>
-                                <div className="flex items-center gap-2 pt-1">
-                                    <Input 
-                                      placeholder="Manual search..." 
-                                      value={subtitleSearchQuery}
-                                      onChange={(e) => setSubtitleSearchQuery(e.target.value)}
-                                      onKeyDown={(e) => e.key === 'Enter' && searchForSubtitles()}
-                                      className="flex-1"
-                                    />
-                                    <Button size="icon" variant="outline" onClick={searchForSubtitles} disabled={isSearchingSubtitles}>
-                                      <Search className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                                {onlineSubtitles.length > 0 && (
-                                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
-                                    <p className="text-xs text-muted-foreground mb-2">Select a subtitle to load:</p>
-                                    {onlineSubtitles.map((sub, i) => (
-                                      <Button key={i} variant="ghost" className="p-1 h-auto text-left w-full justify-start text-xs" onClick={() => loadOnlineSubtitle(sub)}>
-                                        <div className="flex flex-col">
-                                          <span className="font-semibold text-white">{sub.movieName} ({sub.language})</span>
-                                          <span className="text-muted-foreground truncate text-xs">{sub.fileName}</span>
-                                        </div>
-                                      </Button>
-                                    ))}
-                                  </div>
-                                )}
                             </div>
                             {selectedTextTrack !== "off" && (
                               <>
@@ -655,5 +561,3 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     </div>
   );
 }
-
-    
