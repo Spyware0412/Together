@@ -581,7 +581,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                     <ScrollArea className="h-40 mt-2 border rounded-md">
                                         <div className="p-2 space-y-2">
                                         {subtitleSearchResults.map((sub, i) => (
-                                            <div key={i} className="flex justify-between items-center gap-2">
+                                            <div key={`${sub.fileName}-${i}`} className="flex justify-between items-center gap-2">
                                                 <div className="flex-1 truncate">
                                                     <Badge variant="outline">{sub.language}</Badge>
                                                     <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
