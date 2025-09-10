@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(query)}`, {
+    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(query)}&per_page=20`, {
       headers: { 'Api-Key': apiKey, 'Accept': 'application/json' },
     });
     
@@ -118,8 +118,7 @@ export async function GET(request: NextRequest) {
             finalFileName = originalFileName.replace(/\.srt$/, '.vtt');
         }
 
-        const vttBlob = new Blob([vttText], { type: 'text/vtt' });
-        const buffer = Buffer.from(await vttBlob.arrayBuffer());
+        const buffer = Buffer.from(vttText, 'utf-8');
         const dataUri = `data:text/vtt;base64,${buffer.toString('base64')}`;
         
         return {
