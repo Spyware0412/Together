@@ -581,13 +581,17 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                     <ScrollArea className="h-40 mt-2 border rounded-md">
                                         <div className="p-2 space-y-2">
                                         {subtitleSearchResults.map((sub, i) => (
-                                            <div key={`${sub.fileName}-${i}`} className="flex justify-between items-center gap-2">
-                                                <div className="flex-1 truncate">
-                                                    <Badge variant="outline">{sub.language}</Badge>
-                                                    <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
-                                                </div>
-                                                <Button size="sm" variant="ghost" onClick={() => loadOnlineSubtitle(sub)}><Download className="w-4 h-4 mr-2"/>Load</Button>
-                                            </div>
+                                          <div
+                                            key={i}
+                                            className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
+                                            onClick={() => loadOnlineSubtitle(sub)}
+                                          >
+                                              <div className="flex-1 truncate">
+                                                  <Badge variant="outline">{sub.language}</Badge>
+                                                  <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
+                                              </div>
+                                              <Download className="w-4 h-4"/>
+                                          </div>
                                         ))}
                                         </div>
                                     </ScrollArea>
@@ -642,3 +646,4 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     </div>
   );
 }
+
