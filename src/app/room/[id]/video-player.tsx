@@ -15,6 +15,7 @@ import {
   Upload,
   Search,
   Download,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -49,6 +50,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import Image from "next/image";
 
 interface VideoPlayerProps {
   roomId: string;
@@ -72,6 +74,12 @@ interface SubtitleSearchResult {
   fileName: string;
 }
 
+interface TmdbMovieSearchResult {
+  id: number;
+  title: string;
+  release_date: string;
+  poster_path: string | null;
+}
 
 // Helper function to convert SRT subtitles to VTT format
 const srtToVtt = (srtText: string): string => {
@@ -120,10 +128,12 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     position: 5,
   });
 
-  const [subtitleSearchQuery, setSubtitleSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [movieSearchResults, setMovieSearchResults] = useState<TmdbMovieSearchResult[]>([]);
   const [subtitleSearchResults, setSubtitleSearchResults] = useState<SubtitleSearchResult[]>([]);
-  const [isSearchingSubtitles, setIsSearchingSubtitles] = useState(false);
-
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchStep, setSearchStep] = useState<'movie' | 'subtitle'>('movie');
+  const [selectedMovie, setSelectedMovie] = useState<TmdbMovieSearchResult | null>(null);
 
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
 
@@ -193,7 +203,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       const newVideoSrc = URL.createObjectURL(file);
       setVideoSrc(newVideoSrc);
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
-      setSubtitleSearchQuery(cleanFileName);
+      setSearchQuery(cleanFileName);
       setFileName(file.name);
       
       set(roomStateRef, {
@@ -204,7 +214,9 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       if (videoRef.current) videoRef.current.currentTime = 0;
       setProgress(0);
       setSelectedTextTrack("off");
+      setMovieSearchResults([]);
       setSubtitleSearchResults([]);
+      setSearchStep('movie');
     }
   };
 
@@ -287,35 +299,71 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     }, 100);
   }
 
-  const searchForSubtitles = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!subtitleSearchQuery) return;
-      setIsSearchingSubtitles(true);
-      setSubtitleSearchResults([]);
-      try {
-        const res = await fetch(`/api/subtitles?query=${encodeURIComponent(subtitleSearchQuery)}`);
-        const subs: SubtitleSearchResult[] | {error: string} = await res.json();
-        
-        if (res.ok && Array.isArray(subs)) {
-            setSubtitleSearchResults(subs);
-            if (subs.length === 0) {
-              toast({ variant: 'destructive', title: 'No Subtitles Found', description: 'Could not find any subtitles for this query.' });
-            }
-        } else {
-            const error = Array.isArray(subs) ? {error: 'Unknown error'} : subs;
-            toast({ variant: 'destructive', title: 'Error Searching Subtitles', description: error.error });
-        }
-      } catch (err) {
-        console.error("Subtitle search failed:", err);
-        toast({ variant: 'destructive', title: 'Error', description: 'Failed to search for subtitles.' });
-      } finally {
-        setIsSearchingSubtitles(false);
+  const handleMovieSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery) return;
+    setIsSearching(true);
+    setMovieSearchResults([]);
+    setSubtitleSearchResults([]);
+    try {
+      const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(searchQuery)}`);
+      const data: TmdbMovieSearchResult[] | {error: string} = await res.json();
+      
+      if (res.ok && Array.isArray(data)) {
+          setMovieSearchResults(data);
+          if (data.length === 0) {
+            toast({ variant: 'destructive', title: 'No Movies Found', description: 'Could not find any movies for this query.' });
+          }
+      } else {
+          const error = Array.isArray(data) ? {error: 'Unknown error'} : data;
+          toast({ variant: 'destructive', title: 'Error Searching Movies', description: error.error });
       }
+    } catch (err) {
+      console.error("Movie search failed:", err);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to search for movies.' });
+    } finally {
+      setIsSearching(false);
+    }
+  }
+
+  const handleSubtitleSearch = async (movie: TmdbMovieSearchResult) => {
+    setSelectedMovie(movie);
+    setSearchStep('subtitle');
+    setIsSearching(true);
+    setSubtitleSearchResults([]);
+    try {
+      const res = await fetch(`/api/subtitles?tmdb_id=${movie.id}`);
+      const subs: SubtitleSearchResult[] | {error: string} = await res.json();
+      
+      if (res.ok && Array.isArray(subs)) {
+          setSubtitleSearchResults(subs);
+          if (subs.length === 0) {
+            toast({ variant: 'destructive', title: 'No Subtitles Found', description: `No subtitles found for ${movie.title}.` });
+          }
+      } else {
+          const error = Array.isArray(subs) ? {error: 'Unknown error'} : subs;
+          toast({ variant: 'destructive', title: 'Error Searching Subtitles', description: error.error });
+      }
+    } catch (err) {
+      console.error("Subtitle search failed:", err);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to search for subtitles.' });
+    } finally {
+      setIsSearching(false);
+    }
   }
 
   const loadOnlineSubtitle = (subtitle: SubtitleSearchResult) => {
     addTrackToVideo(subtitle.url, subtitle.fileName, subtitle.language, false);
     setSubtitleSearchResults([]); // Clear results after loading
+    setSearchStep('movie');
+    setMovieSearchResults([]);
+  }
+
+  const resetSearch = () => {
+    setSearchStep('movie');
+    setMovieSearchResults([]);
+    setSubtitleSearchResults([]);
+    setSelectedMovie(null);
   }
 
   const togglePlay = () => {
@@ -565,37 +613,81 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                             </div>
                             <Separator/>
                              <div className="grid gap-2">
-                                <Label className="font-medium leading-none">Search Subtitles Online</Label>
-                                <form onSubmit={searchForSubtitles} className="flex gap-2">
-                                    <Input 
-                                        placeholder="e.g., Inception"
-                                        value={subtitleSearchQuery}
-                                        onChange={(e) => setSubtitleSearchQuery(e.target.value)}
-                                        className="bg-input"
-                                    />
-                                    <Button type="submit" size="icon" disabled={isSearchingSubtitles}>
-                                        {isSearchingSubtitles ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4" />}
+                                <div className="flex items-center justify-between">
+                                  <Label className="font-medium leading-none">Search Subtitles Online</Label>
+                                  {searchStep === 'subtitle' && (
+                                    <Button variant="ghost" size="sm" onClick={resetSearch} className="flex items-center gap-1 text-xs h-auto p-1">
+                                      <ArrowLeft className="w-3 h-3" /> Back
                                     </Button>
-                                </form>
-                                {subtitleSearchResults.length > 0 && (
-                                    <ScrollArea className="h-40 mt-2 border rounded-md">
+                                  )}
+                                </div>
+                                
+                                {searchStep === 'movie' && (
+                                  <form onSubmit={handleMovieSearch} className="flex gap-2">
+                                      <Input 
+                                          placeholder="e.g., Inception"
+                                          value={searchQuery}
+                                          onChange={(e) => setSearchQuery(e.target.value)}
+                                          className="bg-input"
+                                      />
+                                      <Button type="submit" size="icon" disabled={isSearching}>
+                                          {isSearching ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4" />}
+                                      </Button>
+                                  </form>
+                                )}
+
+                                {isSearching && <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin"/></div>}
+
+                                {!isSearching && movieSearchResults.length > 0 && searchStep === 'movie' && (
+                                    <ScrollArea className="h-60 mt-2 border rounded-md">
                                         <div className="p-2 space-y-2">
-                                        {subtitleSearchResults.map((sub, i) => (
+                                        {movieSearchResults.map((movie) => (
                                           <div
-                                            key={i}
-                                            className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
-                                            onClick={() => loadOnlineSubtitle(sub)}
+                                            key={movie.id}
+                                            className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
+                                            onClick={() => handleSubtitleSearch(movie)}
                                           >
-                                              <div className="flex-1 truncate">
-                                                  <Badge variant="outline">{sub.language}</Badge>
-                                                  <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
-                                              </div>
-                                              <Download className="w-4 h-4"/>
+                                            <div className="w-12 flex-shrink-0">
+                                              <Image
+                                                  src={movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : 'https://picsum.photos/seed/1/92/138'}
+                                                  width={48}
+                                                  height={72}
+                                                  alt={`Poster for ${movie.title}`}
+                                                  className="rounded"
+                                                  unoptimized
+                                              />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-sm">{movie.title}</p>
+                                                <p className="text-xs text-muted-foreground">{movie.release_date.split('-')[0]}</p>
+                                            </div>
                                           </div>
                                         ))}
                                         </div>
                                     </ScrollArea>
                                 )}
+                                
+                                {!isSearching && subtitleSearchResults.length > 0 && searchStep === 'subtitle' && (
+                                    <ScrollArea className="h-60 mt-2 border rounded-md">
+                                        <div className="p-2 space-y-2">
+                                          <div className="font-semibold text-sm p-2">Results for {selectedMovie?.title}</div>
+                                          {subtitleSearchResults.map((sub, i) => (
+                                            <div
+                                              key={i}
+                                              className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
+                                              onClick={() => loadOnlineSubtitle(sub)}
+                                            >
+                                                <div className="flex-1 truncate">
+                                                    <Badge variant="outline">{sub.language}</Badge>
+                                                    <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
+                                                </div>
+                                                <Download className="w-4 h-4"/>
+                                            </div>
+                                          ))}
+                                        </div>
+                                    </ScrollArea>
+                                )}
+
                             </div>
 
                             {selectedTextTrack !== "off" && (
@@ -646,4 +738,3 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     </div>
   );
 }
-

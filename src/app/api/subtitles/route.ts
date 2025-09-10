@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { gunzipSync } from 'zlib';
 
@@ -62,11 +63,11 @@ const normalizeLang = (lang: string) => {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get('query');
+  const tmdbId = searchParams.get('tmdb_id');
   const apiKey = process.env.OPENSUBTITLES_API_KEY;
 
-  if (!query) {
-    return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
+  if (!tmdbId) {
+    return NextResponse.json({ error: 'TMDb ID parameter is required' }, { status: 400 });
   }
 
   if (!apiKey) {
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'OpenSubtitles API key is not configured' }, { status: 500 });
   }
 
-  const cacheKey = `subtitles_${query.toLowerCase()}`;
+  const cacheKey = `subtitles_${tmdbId}`;
   const cached = cache.get(cacheKey);
 
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?query=${encodeURIComponent(query)}&per_page=40`, {
+    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?tmdb_id=${tmdbId}&per_page=100`, {
       headers: { 'Api-Key': apiKey, 'Accept': 'application/json' },
     });
     
