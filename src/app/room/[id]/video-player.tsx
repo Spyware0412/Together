@@ -12,11 +12,8 @@ import {
   Loader2,
   AlertTriangle,
   Settings,
-  X,
   Upload,
-  Check,
   Languages,
-  Subtitles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -48,6 +45,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
 interface VideoPlayerProps {
   roomId: string;
@@ -63,6 +61,11 @@ interface SubtitleSettings {
   fontSize: number;
   color: string;
   position: number; // As a percentage from the bottom
+}
+
+interface Subtitle {
+  language: string;
+  url: string;
 }
 
 export function VideoPlayer({ roomId }: VideoPlayerProps) {
@@ -88,6 +91,9 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     color: "#FFFFFF",
     position: 5, // as percentage
   });
+  const [isSearchingSubtitles, setIsSearchingSubtitles] = useState(false);
+  const [onlineSubtitles, setOnlineSubtitles] = useState<Subtitle[]>([]);
+
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -171,6 +177,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       if (videoRef.current) videoRef.current.currentTime = 0;
       setProgress(0);
       setSelectedTextTrack("off");
+      setOnlineSubtitles([]);
     }
   };
 
@@ -192,14 +199,16 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     }
 
     // Audio Tracks
-    const availableAudioTracks = Array.from(video.audioTracks as any);
-    setAudioTracks(availableAudioTracks);
-    const enabledAudioTrack = availableAudioTracks.find(t => t.enabled);
-    if(enabledAudioTrack) {
-        setSelectedAudioTrack(enabledAudioTrack.id);
-    } else if (availableAudioTracks.length > 0) {
-        availableAudioTracks[0].enabled = true;
-        setSelectedAudioTrack(availableAudioTracks[0].id);
+    if (video.audioTracks) {
+        const availableAudioTracks = Array.from(video.audioTracks);
+        setAudioTracks(availableAudioTracks);
+        const enabledAudioTrack = availableAudioTracks.find(t => t.enabled);
+        if(enabledAudioTrack) {
+            setSelectedAudioTrack(enabledAudioTrack.id);
+        } else if (availableAudioTracks.length > 0) {
+            availableAudioTracks[0].enabled = true;
+            setSelectedAudioTrack(availableAudioTracks[0].id);
+        }
     }
   }, []);
 
@@ -301,16 +310,21 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   }, [selectedTextTrack, textTracks]);
 
   useEffect(() => {
-    if (videoRef.current && videoRef.current.audioTracks) {
-      videoRef.current.audioTracks.onchange = () => {
-        const enabledTrack = Array.from(videoRef.current!.audioTracks).find(t => t.enabled);
-        if (enabledTrack) setSelectedAudioTrack(enabledTrack.id);
-      }
+    if (videoRef.current?.audioTracks) {
+        const handleAudioTrackChange = () => {
+            const enabledTrack = Array.from(videoRef.current!.audioTracks).find(t => t.enabled);
+            if (enabledTrack) setSelectedAudioTrack(enabledTrack.id);
+        };
+        videoRef.current.audioTracks.addEventListener('change', handleAudioTrackChange);
+        return () => {
+            videoRef.current?.audioTracks.removeEventListener('change', handleAudioTrackChange);
+        }
     }
-  }, [videoRef.current]);
+  }, [videoSrc]);
+
 
   const handleAudioTrackChange = (trackId: string) => {
-    audioTracks.forEach((track: any) => {
+    audioTracks.forEach((track) => {
         track.enabled = track.id === trackId;
     });
     setSelectedAudioTrack(trackId);
@@ -342,6 +356,49 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
       document.getElementById('cinesync-subtitle-styles')?.remove();
     };
   }, [subtitleSettings]);
+
+  const searchForSubtitles = async () => {
+    if (!fileName) return;
+    setIsSearchingSubtitles(true);
+    setOnlineSubtitles([]);
+    try {
+      const res = await fetch(`/api/subtitles?query=${encodeURIComponent(fileName)}`);
+      if (!res.ok) throw new Error("Failed to fetch subtitles");
+      const subs: Subtitle[] = await res.json();
+      setOnlineSubtitles(subs);
+      if (subs.length === 0) {
+        toast({ title: "No subtitles found", description: "Couldn't find any online subtitles for this file." });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to search for subtitles." });
+    } finally {
+      setIsSearchingSubtitles(false);
+    }
+  };
+
+  const loadOnlineSubtitle = (subtitle: Subtitle) => {
+    if (!videoRef.current) return;
+    
+    const trackId = `online-${subtitle.language}-${Date.now()}`;
+    const trackElement = document.createElement('track');
+    trackElement.id = trackId;
+    trackElement.kind = 'subtitles';
+    trackElement.label = `Online - ${subtitle.language}`;
+    trackElement.srclang = subtitle.language.slice(0, 2).toLowerCase();
+    trackElement.src = subtitle.url;
+    trackElement.default = true;
+
+    videoRef.current.appendChild(trackElement);
+    
+    setTimeout(() => {
+        loadTracks();
+        setSelectedTextTrack(trackElement.label);
+        toast({ title: "Success", description: `${subtitle.language} subtitles loaded.`});
+        setOnlineSubtitles([]); // Hide list after selection
+    }, 500);
+  };
+
 
   // -------------------------------
   // Local video event listeners
@@ -490,9 +547,9 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Settings /></Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-80" align="end">
-                        <div className="grid gap-6">
+                        <div className="grid gap-4">
                             <div className="grid gap-2">
-                                <h4 className="font-medium leading-none">Subtitles</h4>
+                                <Label className="font-medium leading-none">Subtitles</Label>
                                 <Select onValueChange={setSelectedTextTrack} value={selectedTextTrack}>
                                     <SelectTrigger className="w-full"><SelectValue placeholder="Select subtitle" /></SelectTrigger>
                                     <SelectContent>
@@ -502,41 +559,60 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <div className="flex items-center gap-2 pt-2">
-                                    <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload (.srt, .vtt)</label></Button>
+                                <div className="flex items-center gap-2 pt-1">
+                                    <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload</label></Button>
                                     <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
-                                    <Button size="sm" variant="outline" disabled>Search Online</Button>
+                                    <Button size="sm" variant="outline" onClick={searchForSubtitles} disabled={isSearchingSubtitles}>
+                                      {isSearchingSubtitles ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />}
+                                      Search Online
+                                    </Button>
                                 </div>
+                                {onlineSubtitles.length > 0 && (
+                                  <div className="mt-2 space-y-2 max-h-32 overflow-y-auto">
+                                    <Label className="text-xs text-muted-foreground">Select a subtitle to load:</Label>
+                                    {onlineSubtitles.map((sub, i) => (
+                                      <Button key={i} variant="link" className="p-0 h-auto text-white w-full justify-start" onClick={() => loadOnlineSubtitle(sub)}>
+                                        {sub.language}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                )}
                             </div>
                             {selectedTextTrack !== "off" && (
-                              <div className="grid gap-4">
-                                <h4 className="font-medium leading-none">Subtitle Style</h4>
-                                <div className="grid grid-cols-2 items-center gap-4">
-                                  <Label htmlFor="font-size">Font Size</Label>
-                                  <Slider id="font-size" value={[subtitleSettings.fontSize]} min={0.5} max={2.5} step={0.1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, fontSize: val }))} />
+                              <>
+                                <Separator />
+                                <div className="grid gap-4">
+                                  <Label className="font-medium leading-none">Subtitle Style</Label>
+                                  <div className="grid grid-cols-2 items-center gap-4">
+                                    <Label htmlFor="font-size">Font Size</Label>
+                                    <Slider id="font-size" value={[subtitleSettings.fontSize]} min={0.5} max={2.5} step={0.1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, fontSize: val }))} />
+                                  </div>
+                                  <div className="grid grid-cols-2 items-center gap-4">
+                                    <Label htmlFor="font-color">Font Color</Label>
+                                    <Input id="font-color" type="color" value={subtitleSettings.color} onChange={(e) => setSubtitleSettings(s => ({ ...s, color: e.target.value }))} className="p-1 h-8" />
+                                  </div>
+                                  <div className="grid grid-cols-2 items-center gap-4">
+                                    <Label htmlFor="position">Position</Label>
+                                    <Slider id="position" value={[subtitleSettings.position]} min={0} max={80} step={1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, position: val }))} />
+                                  </div>
                                 </div>
-                                <div className="grid grid-cols-2 items-center gap-4">
-                                  <Label htmlFor="font-color">Font Color</Label>
-                                  <Input id="font-color" type="color" value={subtitleSettings.color} onChange={(e) => setSubtitleSettings(s => ({ ...s, color: e.target.value }))} className="p-1 h-8" />
-                                </div>
-                                <div className="grid grid-cols-2 items-center gap-4">
-                                  <Label htmlFor="position">Position</Label>
-                                  <Slider id="position" value={[subtitleSettings.position]} min={0} max={80} step={1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, position: val }))} />
-                                </div>
-                              </div>
+                              </>
                             )}
                             {audioTracks.length > 1 && (
-                                <div className="grid gap-2">
-                                    <h4 className="font-medium leading-none">Audio Track</h4>
-                                    <Select onValueChange={handleAudioTrackChange} value={selectedAudioTrack}>
-                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select audio track" /></SelectTrigger>
-                                        <SelectContent>
-                                            {audioTracks.map((track: any, i) => (
-                                                <SelectItem key={track.id || `audio-${i}`} value={track.id}>{track.label || `Track ${i+1}`} ({track.language})</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                <>
+                                  <Separator />
+                                  <div className="grid gap-2">
+                                      <Label className="font-medium leading-none">Audio Track</Label>
+                                      <Select onValueChange={handleAudioTrackChange} value={selectedAudioTrack}>
+                                          <SelectTrigger className="w-full"><SelectValue placeholder="Select audio track" /></SelectTrigger>
+                                          <SelectContent>
+                                              {audioTracks.map((track, i) => (
+                                                  <SelectItem key={track.id || `audio-${i}`} value={track.id}>{track.label || `Track ${i+1}`} ({track.language})</SelectItem>
+                                              ))}
+                                          </SelectContent>
+                                      </Select>
+                                  </div>
+                                </>
                             )}
                         </div>
                     </PopoverContent>
