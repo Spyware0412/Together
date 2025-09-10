@@ -35,7 +35,6 @@ const srtToVtt = (srtText: string): string => {
 
   let i = 0;
   while (i < srtLines.length) {
-    // A valid SRT block starts with a number, followed by a timestamp.
     if (srtLines[i].match(/^\d+$/) && srtLines[i+1]?.includes('-->')) {
       const timeLine = srtLines[i+1].replace(/,/g, '.');
       vtt += timeLine + "\n";
@@ -48,13 +47,18 @@ const srtToVtt = (srtText: string): string => {
       }
       vtt += text.trim() + "\n\n";
     } else {
-        // If the line is not a sequence number, skip it.
         i++;
     }
   }
   return vtt;
 };
 
+// Normalize language codes
+const normalizeLang = (lang: string) => {
+  if (!lang) return "unknown";
+  if (lang.toLowerCase() === "en" || lang.toLowerCase() === "eng") return "eng";
+  return lang.toLowerCase();
+};
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -95,17 +99,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
 
-    // Sort by download count to get more reliable subtitles first
     const sortedSubs = searchData.data.sort((a: Subtitle, b: Subtitle) => b.attributes.download_count - a.attributes.download_count);
 
     const downloadPromises = sortedSubs.map(async (sub: Subtitle) => {
       try {
-        if (!sub.attributes.files || sub.attributes.files.length === 0) {
-            return null;
-        }
+        if (!sub.attributes.files || sub.attributes.files.length === 0) return null;
 
         const fileId = sub.attributes.files[0].file_id;
-        const language = sub.attributes.language;
+        const language = normalizeLang(sub.attributes.language);
         let originalFileName = sub.attributes.files[0].file_name || `${sub.attributes.feature_details.movie_name}.${language}.srt`;
 
         const downloadReqRes = await fetch('https://api.opensubtitles.com/api/v1/download', {
@@ -134,7 +135,7 @@ export async function GET(request: NextRequest) {
         }
 
         let subtitleText: string;
-        const isCompressed = downloadUrl.includes(".gz");
+        const isCompressed = downloadUrl.endsWith(".gz") || subtitleContentRes.headers.get("content-encoding") === "gzip";
 
         if (isCompressed) {
             const arrayBuffer = await subtitleContentRes.arrayBuffer();
@@ -147,9 +148,9 @@ export async function GET(request: NextRequest) {
         let vttText = subtitleText;
         let finalFileName = originalFileName;
 
-        if (originalFileName.toLowerCase().endsWith('.srt')) {
+        if (originalFileName.toLowerCase().endsWith(".srt") || downloadUrl.toLowerCase().endsWith(".srt")) {
             vttText = srtToVtt(subtitleText);
-            finalFileName = originalFileName.replace(/\.srt$/, '.vtt');
+            finalFileName = finalFileName.replace(/\.srt$/, ".vtt");
         }
 
         const buffer = Buffer.from(vttText, 'utf-8');
@@ -173,13 +174,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
     
-    let filteredSubs = successfulSubs;
-
     const englishSubs = successfulSubs.filter((s) => s.language === "eng");
     const otherSubs = successfulSubs.filter((s) => s.language !== "eng");
 
-    // Combine them with English subs first
-    filteredSubs = [...englishSubs, ...otherSubs];
+    const filteredSubs = [...englishSubs, ...otherSubs];
 
     cache.set(cacheKey, { data: filteredSubs, timestamp: Date.now() });
 
