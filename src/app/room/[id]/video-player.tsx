@@ -642,5 +642,3 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     </div>
   );
 }
-
-    
