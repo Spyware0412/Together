@@ -64,15 +64,16 @@ const normalizeLang = (lang: string) => {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const tmdbId = searchParams.get('tmdb_id');
-  const apiKey = process.env.OPENSUBTITLES_API_KEY;
+  const openSubtitlesApiKey = process.env.OPENSUBTITLES_API_KEY;
+  const tmdbApiKey = process.env.TMDB_API_KEY;
 
   if (!tmdbId) {
     return NextResponse.json({ error: 'TMDb ID parameter is required' }, { status: 400 });
   }
 
-  if (!apiKey) {
-    console.error('OpenSubtitles API key is not configured.');
-    return NextResponse.json({ error: 'OpenSubtitles API key is not configured' }, { status: 500 });
+  if (!openSubtitlesApiKey || !tmdbApiKey) {
+    console.error('API keys for OpenSubtitles or TMDb are not configured.');
+    return NextResponse.json({ error: 'Server API keys are not configured' }, { status: 500 });
   }
 
   const cacheKey = `subtitles_${tmdbId}`;
@@ -83,8 +84,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?tmdb_id=${tmdbId}&per_page=100`, {
-      headers: { 'Api-Key': apiKey, 'Accept': 'application/json' },
+    // Step 1: Get IMDb ID from TMDb
+    const tmdbDetailsRes = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${tmdbApiKey}`);
+    if (!tmdbDetailsRes.ok) {
+        return NextResponse.json({ error: 'Failed to fetch movie details from TMDb' }, { status: tmdbDetailsRes.status });
+    }
+    const tmdbDetails = await tmdbDetailsRes.json();
+    const imdbId = tmdbDetails.imdb_id;
+
+    if (!imdbId) {
+        return NextResponse.json({ error: 'IMDb ID not found for this movie on TMDb' }, { status: 404 });
+    }
+
+    // Step 2: Search OpenSubtitles using IMDb ID
+    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdbId}&per_page=100`, {
+      headers: { 'Api-Key': openSubtitlesApiKey, 'Accept': 'application/json' },
     });
     
     if (!searchRes.ok) {
@@ -112,7 +126,7 @@ export async function GET(request: NextRequest) {
 
         const downloadReqRes = await fetch('https://api.opensubtitles.com/api/v1/download', {
           method: 'POST',
-          headers: { 'Api-Key': apiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          headers: { 'Api-Key': openSubtitlesApiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify({ file_id: fileId }),
         });
         
