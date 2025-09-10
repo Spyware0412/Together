@@ -185,7 +185,8 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     const firstSub = availableTextTracks.find(t => t.kind === 'subtitles');
     if (firstSub) {
       firstSub.mode = 'showing';
-      setSelectedTextTrack(firstSub.label || 'track-0');
+      // Use label as the value, it's more reliable for selection
+      setSelectedTextTrack(firstSub.label); 
     } else {
       setSelectedTextTrack('off');
     }
