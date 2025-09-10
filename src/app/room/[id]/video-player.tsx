@@ -71,6 +71,31 @@ interface Subtitle {
   fileName: string;
 }
 
+// Helper function to convert SRT subtitles to VTT format
+const srtToVtt = (srtText: string): string => {
+  let vtt = "WEBVTT\n\n";
+  const srtLines = srtText.trim().split(/\r?\n/);
+
+  let i = 0;
+  while (i < srtLines.length) {
+    // Skip empty lines and sequence number
+    if (srtLines[i].trim().match(/^\d+$/) && srtLines[i+1]?.includes('-->')) {
+      const timeLine = srtLines[i+1].replace(/,/g, '.');
+      vtt += timeLine + "\n";
+      i += 2;
+
+      let text = "";
+      while (i < srtLines.length && srtLines[i].trim() !== "") {
+        text += srtLines[i] + "\n";
+        i++;
+      }
+      vtt += text.trim() + "\n\n";
+    }
+    i++;
+  }
+  return vtt;
+};
+
 export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -219,27 +244,44 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
   const handleSubtitleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && videoRef.current) {
-        const trackUrl = URL.createObjectURL(file);
-        const trackId = `external-${file.name}`;
-        
-        const oldTrackEl = playerRef.current?.querySelector(`track[id="${trackId}"]`);
-        if(oldTrackEl) oldTrackEl.remove();
-
-        const trackElement = document.createElement('track');
-        trackElement.id = trackId;
-        trackElement.kind = 'subtitles';
-        trackElement.label = file.name;
-        trackElement.srclang = 'en';
-        trackElement.src = trackUrl;
-        
-        videoRef.current.appendChild(trackElement);
-        externalSubtitlesRef.current.set(trackId, trackUrl);
-
-        loadTracks();
-        setSelectedTextTrack(file.name);
-        toast({ title: "Success", description: "Subtitle file loaded."});
+        if(file.name.endsWith('.srt')) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const srtText = e.target?.result as string;
+            const vttText = srtToVtt(srtText);
+            const blob = new Blob([vttText], { type: 'text/vtt' });
+            const trackUrl = URL.createObjectURL(blob);
+            addTrackToVideo(trackUrl, file.name.replace('.srt', '.vtt'));
+          };
+          reader.readAsText(file);
+        } else {
+          const trackUrl = URL.createObjectURL(file);
+          addTrackToVideo(trackUrl, file.name);
+        }
     }
   };
+  
+  const addTrackToVideo = (trackUrl: string, label: string) => {
+    if (!videoRef.current) return;
+    const trackId = `external-${label}`;
+    
+    const oldTrackEl = playerRef.current?.querySelector(`track[id="${trackId}"]`);
+    if(oldTrackEl) oldTrackEl.remove();
+
+    const trackElement = document.createElement('track');
+    trackElement.id = trackId;
+    trackElement.kind = 'subtitles';
+    trackElement.label = label;
+    trackElement.srclang = 'en';
+    trackElement.src = trackUrl;
+    
+    videoRef.current.appendChild(trackElement);
+    externalSubtitlesRef.current.set(trackId, trackUrl);
+
+    loadTracks();
+    setSelectedTextTrack(label);
+    toast({ title: "Success", description: "Subtitle file loaded."});
+  }
 
   const togglePlay = () => {
     if (!videoRef.current || fileName !== roomState?.fileName) return;
@@ -366,24 +408,29 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     }
   };
 
-  const loadOnlineSubtitle = (subtitle: Subtitle) => {
+  const loadOnlineSubtitle = async (subtitle: Subtitle) => {
     if (!videoRef.current) return;
-    
-    const trackId = `online-${subtitle.language}-${Date.now()}`;
-    const trackElement = document.createElement('track');
-    trackElement.id = trackId;
-    trackElement.kind = 'subtitles';
-    trackElement.label = `${subtitle.movieName} (${subtitle.language})`;
-    trackElement.srclang = subtitle.language.slice(0, 2).toLowerCase();
-    trackElement.src = subtitle.url;
-    trackElement.default = true;
+    setIsSearchingSubtitles(true);
+    try {
+      const srtRes = await fetch(subtitle.url);
+      if (!srtRes.ok) throw new Error("Failed to download subtitle file.");
 
-    videoRef.current.appendChild(trackElement);
-    
-    loadTracks();
-    setSelectedTextTrack(trackElement.label);
-    toast({ title: "Success", description: `${subtitle.language} subtitles loaded.`});
-    setOnlineSubtitles([]);
+      const srt = await srtRes.text();
+      const vtt = srtToVtt(srt);
+      const blob = new Blob([vtt], { type: "text/vtt" });
+      const trackUrl = URL.createObjectURL(blob);
+
+      const label = `${subtitle.movieName} (${subtitle.language})`;
+      addTrackToVideo(trackUrl, label);
+
+      toast({ title: "Success", description: `${subtitle.language} subtitles loaded.`});
+      setOnlineSubtitles([]); // Hide list after selection
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Error", description: "Could not load selected subtitle." });
+    } finally {
+      setIsSearchingSubtitles(false);
+    }
   };
 
   useEffect(() => {
@@ -529,7 +576,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                 <div className="flex items-center gap-2 pt-1">
                                     <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload</label></Button>
                                     <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
-                                    <Button size="sm" variant="outline" onClick={() => searchForSubtitles()} disabled={isSearchingSubtitles}>
+                                    <Button size="sm" variant="outline" onClick={searchForSubtitles} disabled={isSearchingSubtitles}>
                                       {isSearchingSubtitles ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />}
                                       Online
                                     </Button>
@@ -539,6 +586,7 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                       placeholder="Manual search..." 
                                       value={subtitleSearchQuery}
                                       onChange={(e) => setSubtitleSearchQuery(e.target.value)}
+                                      onKeyDown={(e) => e.key === 'Enter' && searchForSubtitles()}
                                       className="flex-1"
                                     />
                                     <Button size="icon" variant="outline" onClick={searchForSubtitles} disabled={isSearchingSubtitles}>
@@ -549,10 +597,11 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
                                   <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
                                     <p className="text-xs text-muted-foreground mb-2">Select a subtitle to load:</p>
                                     {onlineSubtitles.map((sub, i) => (
-                                      <Button key={i} variant="ghost" className="p-1 h-auto text-white w-full justify-start text-left text-xs" onClick={() => loadOnlineSubtitle(sub)}>
-                                        {sub.movieName} ({sub.language})
-                                        <br/>
-                                        <span className="text-muted-foreground truncate text-xs">{sub.fileName}</span>
+                                      <Button key={i} variant="ghost" className="p-1 h-auto text-left w-full justify-start text-xs" onClick={() => loadOnlineSubtitle(sub)}>
+                                        <div className="flex flex-col">
+                                          <span className="font-semibold text-white">{sub.movieName} ({sub.language})</span>
+                                          <span className="text-muted-foreground truncate text-xs">{sub.fileName}</span>
+                                        </div>
                                       </Button>
                                     ))}
                                   </div>
@@ -606,3 +655,5 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
     </div>
   );
 }
+
+    
