@@ -38,33 +38,32 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [showNotification, setShowNotification] = useState(false);
   const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
   const { toast } = useToast();
+  const initialLoadRef = useRef(true);
 
   useEffect(() => {
     const usersRef = ref(database, `rooms/${roomId}/users`);
+    
     const onUsersChange = (snapshot: any) => {
       const usersData = snapshot.val();
-      if (usersData) {
-        const userList: UserProfile[] = Object.values(usersData).filter((u: any) => u.online);
-        
-        // Check for new users
-        if (userList.length > activeUsers.length) {
-          const newUsers = userList.filter(u => !activeUsers.some(au => au.id === u.id));
-          newUsers.forEach(newUser => {
-            // Don't notify for self
-            const currentUser = JSON.parse(localStorage.getItem('cinesync_user') || '{}');
-            if (newUser.id !== currentUser.id) {
-               toast({
-                title: 'User Joined',
-                description: `${newUser.name} has joined the room.`,
-              });
-            }
-          });
-        }
-        
-        setActiveUsers(userList);
-      } else {
-        setActiveUsers([]);
+      const userList: UserProfile[] = usersData ? Object.values(usersData).filter((u: any) => u.online) : [];
+
+      if (initialLoadRef.current) {
+        initialLoadRef.current = false;
+      } else if (userList.length > activeUsers.length) {
+        const newUsers = userList.filter(u => !activeUsers.some(au => au.id === u.id));
+        const currentUser = JSON.parse(localStorage.getItem('cinesync_user') || '{}');
+
+        newUsers.forEach(newUser => {
+          if (newUser.id !== currentUser.id && newUser.name) {
+             toast({
+              title: 'User Joined',
+              description: `${newUser.name} has joined the room.`,
+            });
+          }
+        });
       }
+      
+      setActiveUsers(userList);
     };
 
     onValue(usersRef, onUsersChange);
