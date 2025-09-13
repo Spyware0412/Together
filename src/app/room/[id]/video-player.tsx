@@ -77,8 +77,8 @@ interface VideoPlayerProps {
 }
 
 interface RoomState {
-  videoUrl: string | null;
-  fileName: string | null;
+  videoUrl?: string | null;
+  fileName?: string | null;
   isPlaying: boolean;
   progress: number;
 }
@@ -194,26 +194,44 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
 
-      if (data?.videoUrl && videoSrc !== data.videoUrl) {
-          if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
-          localVideoUrlRef.current = null;
-          setVideoSrc(data.videoUrl);
-          setLocalFileName(null);
+      if (data?.videoUrl) {
+          if (videoSrc !== data.videoUrl) {
+              if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
+              localVideoUrlRef.current = null;
+              setVideoSrc(data.videoUrl);
+              setLocalFileName(null);
+          }
+      } else if (data?.fileName) {
+        // This is a local file session, don't set videoSrc unless it's the user's own file
+        if (localFileName !== data.fileName) {
+          if (videoSrc && localVideoUrlRef.current) {
+            URL.revokeObjectURL(localVideoUrlRef.current);
+            localVideoUrlRef.current = null;
+            setVideoSrc(null);
+          }
+        }
+      } else {
+        // No video set in room
+        if (videoSrc) {
+           if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
+           localVideoUrlRef.current = null;
+           setVideoSrc(null);
+           setLocalFileName(null);
+        }
       }
 
-      if (videoRef.current && data) {
-        if (data.fileName && (localFileName === data.fileName || data.videoUrl)) {
-          const serverTime = data.progress ?? 0;
-          const clientTime = videoRef.current.currentTime;
-          if (Math.abs(serverTime - clientTime) > 2) {
-            videoRef.current.currentTime = serverTime;
-          }
 
-          const serverPlaying = data.isPlaying ?? false;
-          if (serverPlaying !== !videoRef.current.paused) {
-            if (serverPlaying) videoRef.current.play().catch(() => {});
-            else videoRef.current.pause();
-          }
+      if (videoRef.current && data) {
+        const serverTime = data.progress ?? 0;
+        const clientTime = videoRef.current.currentTime;
+        if (Math.abs(serverTime - clientTime) > 2) {
+          videoRef.current.currentTime = serverTime;
+        }
+
+        const serverPlaying = data.isPlaying ?? false;
+        if (serverPlaying !== !videoRef.current.paused) {
+          if (serverPlaying) videoRef.current.play().catch(() => {});
+          else videoRef.current.pause();
         }
       }
       setTimeout(() => {
@@ -231,7 +249,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       }
       if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
     };
-  }, [roomId, videoSrc]);
+  }, [roomId, videoSrc, localFileName]);
 
   const syncState = useCallback((state: Partial<RoomState>) => {
       if (isRemoteUpdate.current) return;
@@ -253,11 +271,12 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       setLocalFileName(file.name);
       
       set(roomStateRef, {
-        videoUrl: null,
         fileName: file.name,
         isPlaying: false,
         progress: 0,
+        videoUrl: null, // Explicitly set videoUrl to null for local file
       });
+
       if (videoRef.current) videoRef.current.currentTime = 0;
       setProgress(0);
       setSelectedTextTrack("off");
@@ -570,18 +589,16 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       </div>
     );
   }
+  
+  const hasVideoSource = videoSrc || roomState?.videoUrl;
 
-  if (!videoSrc && !roomState?.videoUrl) {
+  if (!hasVideoSource && !roomState?.fileName) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Film className="w-16 h-16 text-muted-foreground" />
-        <h2 className="text-2xl font-bold">{roomState?.fileName ? "Join the session" : "Select a video to start"}</h2>
+        <h2 className="text-2xl font-bold">Select a video to start</h2>
         <p className="text-muted-foreground max-w-sm">
-          {roomState?.fileName ? (
-            <>The group is watching <span className="font-bold text-foreground">{roomState?.fileName}</span>. Choose the same file or wait for the host to share a URL.</>
-          ) : (
-            "Choose a video file or load a URL to begin the watch party. Playback will sync with others."
-          )}
+          Choose a video file or load a URL to begin the watch party. Playback will sync with others.
         </p>
         <Button asChild className="mt-4"><label htmlFor="video-upload" className="cursor-pointer">Choose Video File</label></Button>
         <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
@@ -604,10 +621,26 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>File Mismatch</AlertTitle>
             <AlertDescription>
-              The video you selected (<span className="font-bold">{localFileName}</span>) is different from the one being played in the room (<span className="font-bold">{roomState?.fileName}</span>). Please select the correct file to sync with the group.
+              The group is watching <span className="font-bold">{roomState?.fileName}</span>. Please select the correct file to sync.
             </AlertDescription>
             <div className="mt-4">
               <Button asChild variant="secondary"><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Correct Video File</label></Button>
+              <input id="video-upload-mismatch" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
+            </div>
+          </Alert>
+        </div>
+      )}
+
+      {!hasVideoSource && roomState?.fileName && !isPlaybackDisabled && (
+         <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
+          <Alert className="max-w-md">
+            <Film className="h-4 w-4" />
+            <AlertTitle>Waiting for file</AlertTitle>
+            <AlertDescription>
+              The group is watching <span className="font-bold">{roomState?.fileName}</span>. Choose the same file on your device to start playback.
+            </AlertDescription>
+            <div className="mt-4">
+              <Button asChild><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Video File</label></Button>
               <input id="video-upload-mismatch" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
             </div>
           </Alert>
@@ -838,5 +871,3 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
-
-    

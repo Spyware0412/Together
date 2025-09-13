@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -97,16 +98,16 @@ export default function RoomPage() {
 
   const handleSetVideoUrl = () => {
     if(videoUrl.trim()){
-      // Validate URL roughly
       try {
-        new URL(videoUrl);
+        const url = new URL(videoUrl);
         set(roomStateRef, {
-          videoUrl: videoUrl,
-          fileName: new URL(videoUrl).pathname.split('/').pop() || 'Video from URL',
+          videoUrl: url.href,
+          fileName: url.pathname.split('/').pop() || 'Video from URL',
           isPlaying: false,
           progress: 0,
         });
         setIsUrlDialogOpen(false);
+        setVideoUrl('');
       } catch (error) {
         toast({
           variant: 'destructive',
