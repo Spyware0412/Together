@@ -190,11 +190,11 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     const onStateChange = (snapshot: any) => {
       const data: RoomState | null = snapshot.val();
       setIsLoading(false);
-      
       isRemoteUpdate.current = true;
       setRoomState(data);
 
       if (data?.videoUrl) {
+          // A URL is being played
           if (videoSrc !== data.videoUrl) {
               if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
               localVideoUrlRef.current = null;
@@ -202,24 +202,19 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
               setLocalFileName(null);
           }
       } else if (data?.fileName) {
-        // This is a local file session, don't set videoSrc unless it's the user's own file
-        if (localFileName !== data.fileName) {
-          if (videoSrc && localVideoUrlRef.current) {
-            URL.revokeObjectURL(localVideoUrlRef.current);
-            localVideoUrlRef.current = null;
+          // A local file is being played. Only change videoSrc if it's not already set by the local user.
+          if (!localVideoUrlRef.current && videoSrc) {
             setVideoSrc(null);
           }
-        }
       } else {
-        // No video set in room
-        if (videoSrc) {
-           if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
-           localVideoUrlRef.current = null;
-           setVideoSrc(null);
-           setLocalFileName(null);
-        }
+          // No video in the room
+          if (videoSrc) {
+             if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
+             localVideoUrlRef.current = null;
+             setVideoSrc(null);
+             setLocalFileName(null);
+          }
       }
-
 
       if (videoRef.current && data) {
         const serverTime = data.progress ?? 0;
@@ -234,6 +229,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
           else videoRef.current.pause();
         }
       }
+
       setTimeout(() => {
         isRemoteUpdate.current = false;
       }, 100);
@@ -249,7 +245,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       }
       if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
     };
-  }, [roomId, videoSrc, localFileName]);
+  }, [roomId]);
 
   const syncState = useCallback((state: Partial<RoomState>) => {
       if (isRemoteUpdate.current) return;
@@ -259,22 +255,26 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Clean up old state
       if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
       externalSubtitlesRef.current.forEach(URL.revokeObjectURL);
       externalSubtitlesRef.current.clear();
       
       const newVideoSrc = URL.createObjectURL(file);
-      localVideoUrlRef.current = newVideoSrc;
-      setVideoSrc(newVideoSrc);
+      localVideoUrlRef.current = newVideoSrc; // Store the object URL
+      
+      setVideoSrc(newVideoSrc); // Set it to video element src
+      
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
       setSearchQuery(cleanFileName);
-      setLocalFileName(file.name);
+      setLocalFileName(file.name); // Keep track of the local file name
       
+      // Update Firebase with filename only, NO videoUrl for local files
       set(roomStateRef, {
         fileName: file.name,
         isPlaying: false,
         progress: 0,
-        videoUrl: null, // Explicitly set videoUrl to null for local file
+        videoUrl: null, 
       });
 
       if (videoRef.current) videoRef.current.currentTime = 0;
@@ -590,7 +590,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     );
   }
   
-  const hasVideoSource = videoSrc || roomState?.videoUrl;
+  const hasVideoSource = !!videoSrc;
 
   if (!hasVideoSource && !roomState?.fileName) {
     return (
@@ -606,8 +606,8 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     );
   }
 
-  const isPlaybackDisabled = roomState?.fileName && !roomState.videoUrl && localFileName !== roomState.fileName;
-
+  const isPlaybackDisabled = roomState?.fileName && !localFileName;
+  
   if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
 
   return (
@@ -678,7 +678,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                         <div className="grid gap-3 p-2">
                             <h4 className="font-medium leading-none">Video Info</h4>
                             <div className="text-sm space-y-2">
-                                <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{roomState?.fileName ?? 'N/A'}</span></p>
+                                <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? roomState?.fileName ?? 'N/A'}</span></p>
                                 <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
                                 <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
                                 <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
@@ -871,3 +871,5 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
+
+    
