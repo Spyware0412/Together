@@ -594,7 +594,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
 
   return (
     <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" />
+      <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" preload="metadata" />
       
       {isPlaybackDisabled && (
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
