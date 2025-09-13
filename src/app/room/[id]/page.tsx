@@ -7,7 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video, Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,7 @@ export default function RoomPage() {
   const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
   const [isUrlDialogOpen, setIsUrlDialogOpen] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
+  const [isResolvingUrl, setIsResolvingUrl] = useState(false);
   
   const { toast } = useToast();
   const initialLoadRef = useRef(true);
@@ -96,25 +97,62 @@ export default function RoomPage() {
     };
   }, [roomId, activeUsers, toast]);
 
-  const handleSetVideoUrl = () => {
-    if(videoUrl.trim()){
-      try {
-        const url = new URL(videoUrl);
-        set(roomStateRef, {
-          videoUrl: url.href,
-          fileName: null,
-          isPlaying: false,
-          progress: 0,
+  const handleSetVideoUrl = async () => {
+    if(!videoUrl.trim()) return;
+
+    try {
+        new URL(videoUrl); // Basic URL validation
+    } catch (error) {
+        toast({
+            variant: 'destructive',
+            title: 'Invalid URL',
+            description: 'Please enter a valid video URL.',
         });
+        return;
+    }
+    
+    setIsResolvingUrl(true);
+
+    try {
+        let resolvedUrl = videoUrl;
+        let videoTitle: string | null = null;
+        
+        // Check if it's a YouTube URL
+        if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
+            const res = await fetch(`/api/youtube?url=${encodeURIComponent(videoUrl)}`);
+            const data = await res.json();
+            
+            if (res.ok && data.videoUrl) {
+                resolvedUrl = data.videoUrl;
+                videoTitle = data.title;
+                 toast({
+                    title: 'YouTube Video Loaded',
+                    description: `Now playing: ${data.title}`,
+                });
+            } else {
+                throw new Error(data.error || 'Failed to resolve YouTube URL.');
+            }
+        }
+
+        set(roomStateRef, {
+            videoUrl: resolvedUrl,
+            fileName: videoTitle,
+            isPlaying: false,
+            progress: 0,
+        });
+
         setIsUrlDialogOpen(false);
         setVideoUrl('');
-      } catch (error) {
+
+    } catch (error: any) {
+        console.error("URL processing error:", error);
         toast({
-          variant: 'destructive',
-          title: 'Invalid URL',
-          description: 'Please enter a valid video URL.',
-        })
-      }
+            variant: 'destructive',
+            title: 'Error Loading URL',
+            description: error.message || 'Could not load the provided video URL.',
+        });
+    } finally {
+        setIsResolvingUrl(false);
     }
   }
 
@@ -191,11 +229,16 @@ export default function RoomPage() {
                         onChange={(e) => setVideoUrl(e.target.value)}
                         placeholder="https://example.com/video.mp4"
                         className="col-span-3 bg-input"
+                        disabled={isResolvingUrl}
                       />
                     </div>
                   </div>
-                  <Button onClick={handleSetVideoUrl}>
-                    <Play className="w-4 h-4 mr-2" />
+                  <Button onClick={handleSetVideoUrl} disabled={isResolvingUrl}>
+                    {isResolvingUrl ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Play className="w-4 h-4 mr-2" />
+                    )}
                     Play Video
                   </Button>
                 </DialogContent>
