@@ -20,6 +20,7 @@ interface Message {
         avatar: string;
     };
     text: string;
+    timestamp: number;
 }
 
 interface UserProfile {
@@ -71,7 +72,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     return () => {
       off(usersRef, 'value', onUsersChange);
     };
-  }, [roomId, activeUsers]);
+  }, [roomId, activeUsers, toast]);
 
 
   const handleNewMessage = useCallback((message: Message) => {
