@@ -46,3 +46,4 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'An internal error occurred while fetching video data' }, { status: 500 });
     }
 }
+
