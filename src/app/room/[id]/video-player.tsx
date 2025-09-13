@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -191,25 +192,34 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
       
-      if (data?.videoUrl) { 
-          if (videoSrc !== data.videoUrl) {
-              if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
-              localVideoUrlRef.current = null;
-              setVideoSrc(data.videoUrl);
-              setLocalFileName(data.fileName);
-          }
-      } else if (data?.fileName) { 
-          if (!localVideoUrlRef.current) { 
-            setVideoSrc(null);
+      // Logic for handling public URL vs local file
+      if (data?.videoUrl) {
+        // It's a public URL
+        if (videoSrc !== data.videoUrl) {
+            if (localVideoUrlRef.current) {
+                URL.revokeObjectURL(localVideoUrlRef.current);
+                localVideoUrlRef.current = null;
+            }
+            setVideoSrc(data.videoUrl);
             setLocalFileName(data.fileName);
-          }
-      } else { 
-          if (videoSrc) {
-             if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
-             localVideoUrlRef.current = null;
-             setVideoSrc(null);
-             setLocalFileName(null);
-          }
+        }
+      } else if (data?.fileName) {
+        // It's a local file, identified by file name
+        if (videoSrc && !localVideoUrlRef.current) {
+            // Switched from a URL to local file, clear the source
+            setVideoSrc(null);
+        }
+        setLocalFileName(data.fileName);
+      } else {
+        // No video is set in the room
+        if (videoSrc) {
+            if (localVideoUrlRef.current) {
+                URL.revokeObjectURL(localVideoUrlRef.current);
+                localVideoUrlRef.current = null;
+            }
+            setVideoSrc(null);
+            setLocalFileName(null);
+        }
       }
 
       if (videoRef.current && data) {
@@ -819,3 +829,5 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
+
+    
