@@ -10,12 +10,15 @@ import { VideoPlayer } from './video-player';
 import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video, Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off, update, serverTimestamp, set } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 
 interface Message {
     id: string;
@@ -49,10 +52,14 @@ export default function RoomPage() {
   const [isResolvingUrl, setIsResolvingUrl] = useState(false);
   
   const { toast } = useToast();
-  const initialLoadRef = useRef(true);
   const userStatusRef = useRef<any>(null);
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeUsersRef = useRef(activeUsers);
+  
+  useEffect(() => {
+    activeUsersRef.current = activeUsers;
+  }, [activeUsers]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -67,13 +74,12 @@ export default function RoomPage() {
     const onUsersChange = (snapshot: any) => {
       const usersData = snapshot.val();
       const userList: UserProfile[] = usersData ? Object.values(usersData).filter((u: any) => u.online) : [];
+      const previousUsers = activeUsersRef.current;
+      
+      const newUsers = userList.filter(u => !previousUsers.some(au => au.id === u.id));
+      const currentUser = JSON.parse(localStorage.getItem('cinesync_user') || '{}');
 
-      if (initialLoadRef.current) {
-        initialLoadRef.current = false;
-      } else if (userList.length > activeUsers.length) {
-        const newUsers = userList.filter(u => !activeUsers.some(au => au.id === u.id));
-        const currentUser = JSON.parse(localStorage.getItem('cinesync_user') || '{}');
-
+      if (previousUsers.length > 0) { // Don't show toast on initial load
         newUsers.forEach(newUser => {
           if (newUser.id !== currentUser.id && newUser.name) {
              toast({
@@ -95,7 +101,7 @@ export default function RoomPage() {
         update(userStatusRef.current, { online: false, last_seen: serverTimestamp() });
       }
     };
-  }, [roomId, activeUsers, toast]);
+  }, [roomId, toast]);
 
   const handleSetVideoUrl = async () => {
     if(!videoUrl.trim()) return;
@@ -224,10 +230,32 @@ export default function RoomPage() {
                 </DialogContent>
               </Dialog>
 
-              <div className="flex items-center gap-2 text-muted-foreground">
-                  <Users className="w-5 h-5"/>
-                  <span>{activeUsers.length} watching</span>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <div className="flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+                        <Users className="w-5 h-5"/>
+                        <span>{activeUsers.length} watching</span>
+                    </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-64" align="end">
+                  <DropdownMenuLabel>Users in Room ({activeUsers.length})</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {activeUsers.length > 0 ? (
+                    activeUsers.map(user => (
+                      <DropdownMenuItem key={user.id} className="gap-2">
+                         <Avatar className="w-6 h-6">
+                            <AvatarImage src={user.avatar} alt={user.name} />
+                            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate">{user.name}</span>
+                      </DropdownMenuItem>
+                    ))
+                  ) : (
+                     <DropdownMenuItem disabled>No other users online</DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
                <Button variant="ghost" size="icon" onClick={handleChangeVideoClick} title="Change Video">
                   <Video className="w-5 h-5 text-muted-foreground" />
               </Button>
@@ -278,3 +306,5 @@ export default function RoomPage() {
     </div>
   );
 }
+
+    
