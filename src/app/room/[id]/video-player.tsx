@@ -98,6 +98,14 @@ interface TmdbMovieSearchResult {
   poster_path: string | null;
 }
 
+interface UserProfile {
+    id: string;
+    name: string;
+    email: string;
+    avatar: string;
+}
+
+
 // Helper function to convert SRT subtitles to VTT format
 const srtToVtt = (srtText: string): string => {
   let vtt = "WEBVTT\n\n";
@@ -159,15 +167,20 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSeeking = useRef(false);
   const lastSyncTimestamp = useRef(0);
-  const [userId] = useState(() => uuidv4());
   const isRemoteUpdate = useRef(false);
 
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
-  const userStatusRef = ref(database, `rooms/${roomId}/users/${userId}`);
 
   useEffect(() => {
-    set(userStatusRef, { online: true, last_seen: serverTimestamp() });
-    onDisconnect(userStatusRef).remove();
+    let userStatusRef: any;
+    const storedUser = localStorage.getItem('cinesync_user');
+    
+    if (storedUser) {
+        const user: UserProfile = JSON.parse(storedUser);
+        userStatusRef = ref(database, `rooms/${roomId}/users/${user.id}`);
+        set(userStatusRef, { ...user, online: true, last_seen: serverTimestamp() });
+        onDisconnect(userStatusRef).update({ online: false, last_seen: serverTimestamp() });
+    }
 
     const onStateChange = (snapshot: any) => {
       const data: RoomState | null = snapshot.val();
@@ -200,8 +213,10 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
 
     return () => {
       off(roomStateRef, "value", onStateChange);
-      onDisconnect(userStatusRef).cancel();
-      set(userStatusRef, null);
+      if (userStatusRef) {
+          onDisconnect(userStatusRef).cancel();
+          update(userStatusRef, { online: false, last_seen: serverTimestamp() });
+      }
     };
   }, [roomId, fileName]);
 
@@ -690,9 +705,9 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                                           <div className="font-semibold text-sm p-2">Results for {selectedMovie?.title}</div>
                                           {subtitleSearchResults.map((sub, i) => (
                                             <div
-                                              key={i}
-                                              className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
-                                              onClick={() => loadOnlineSubtitle(sub)}
+                                                key={i}
+                                                className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
+                                                onClick={() => loadOnlineSubtitle(sub)}
                                             >
                                                 <div className="flex-1 truncate">
                                                     <Badge variant="outline">{sub.language}</Badge>

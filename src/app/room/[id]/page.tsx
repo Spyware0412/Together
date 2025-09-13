@@ -1,14 +1,16 @@
+
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, X } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { AnimatePresence, motion } from 'framer-motion';
+import { database } from '@/lib/firebase';
+import { ref, onValue, off } from 'firebase/database';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
     id: string;
@@ -20,14 +22,59 @@ interface Message {
     text: string;
 }
 
+interface UserProfile {
+    id: string;
+    name: string;
+    email: string;
+    avatar: string;
+    online?: boolean;
+}
+
 export default function RoomPage({ params }: { params: { id: string } }) {
   const roomId = params.id;
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [lastMessage, setLastMessage] = useState<Message | null>(null);
   const [showNotification, setShowNotification] = useState(false);
+  const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const usersRef = ref(database, `rooms/${roomId}/users`);
+    const onUsersChange = (snapshot: any) => {
+      const usersData = snapshot.val();
+      if (usersData) {
+        const userList: UserProfile[] = Object.values(usersData).filter((u: any) => u.online);
+        
+        // Check for new users
+        if (userList.length > activeUsers.length) {
+          const newUsers = userList.filter(u => !activeUsers.some(au => au.id === u.id));
+          newUsers.forEach(newUser => {
+            // Don't notify for self
+            const currentUser = JSON.parse(localStorage.getItem('cinesync_user') || '{}');
+            if (newUser.id !== currentUser.id) {
+               toast({
+                title: 'User Joined',
+                description: `${newUser.name} has joined the room.`,
+              });
+            }
+          });
+        }
+        
+        setActiveUsers(userList);
+      } else {
+        setActiveUsers([]);
+      }
+    };
+
+    onValue(usersRef, onUsersChange);
+
+    return () => {
+      off(usersRef, 'value', onUsersChange);
+    };
+  }, [roomId, activeUsers]);
+
 
   const handleNewMessage = useCallback((message: Message) => {
-    // Only show notification if the sheet is closed and player is active
     if (!isSheetOpen) {
       setLastMessage(message);
       setShowNotification(true);
@@ -61,7 +108,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             <div className="flex items-center gap-4">
               <div className="hidden md:flex items-center gap-2 text-muted-foreground">
                   <Users className="w-5 h-5"/>
-                  <span>3 watching</span>
+                  <span>{activeUsers.length} watching</span>
               </div>
               <div className="md:hidden">
                 <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
