@@ -73,6 +73,7 @@ interface VideoPlayerProps {
   showNotification: boolean;
   onNotificationClick: () => void;
   onCloseNotification: (e?: React.MouseEvent) => void;
+  fileInputRef: React.RefObject<HTMLInputElement>;
 }
 
 interface RoomState {
@@ -133,7 +134,7 @@ const srtToVtt = (srtText: string): string => {
   return vtt;
 };
 
-export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificationClick, onCloseNotification }: VideoPlayerProps) {
+export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificationClick, onCloseNotification, fileInputRef }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [localFileName, setLocalFileName] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
@@ -583,7 +584,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
           )}
         </p>
         <Button asChild className="mt-4"><label htmlFor="video-upload" className="cursor-pointer">Choose Video File</label></Button>
-        <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
+        <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       </div>
     );
   }
@@ -595,6 +596,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   return (
     <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
       <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" preload="metadata" />
+      <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       
       {isPlaybackDisabled && (
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">

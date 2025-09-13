@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -7,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -51,6 +50,7 @@ export default function RoomPage() {
   const initialLoadRef = useRef(true);
   const userStatusRef = useRef<any>(null);
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!roomId) return;
@@ -148,6 +148,10 @@ export default function RoomPage() {
       router.push('/');
     }
   };
+  
+  const handleChangeVideoClick = () => {
+    fileInputRef.current?.click();
+  };
 
   if (!roomId) {
     return null; // Or a loading state
@@ -200,6 +204,9 @@ export default function RoomPage() {
                   <Users className="w-5 h-5"/>
                   <span>{activeUsers.length} watching</span>
               </div>
+               <Button variant="ghost" size="icon" onClick={handleChangeVideoClick} title="Change Video">
+                  <Video className="w-5 h-5 text-muted-foreground" />
+              </Button>
               <Button variant="ghost" size="icon" onClick={handleLeaveRoom} title="Leave Room">
                   <LogOut className="w-5 h-5 text-muted-foreground" />
               </Button>
@@ -232,6 +239,7 @@ export default function RoomPage() {
             showNotification={showNotification}
             onNotificationClick={handleNotificationClick}
             onCloseNotification={closeNotification}
+            fileInputRef={fileInputRef}
           />
         </div>
       </main>
