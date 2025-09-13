@@ -192,34 +192,33 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
       
-      // Logic for handling public URL vs local file
+      // Main logic to handle video source synchronization
       if (data?.videoUrl) {
-        // It's a public URL
-        if (videoSrc !== data.videoUrl) {
-            if (localVideoUrlRef.current) {
-                URL.revokeObjectURL(localVideoUrlRef.current);
-                localVideoUrlRef.current = null;
-            }
-            setVideoSrc(data.videoUrl);
-            setLocalFileName(data.fileName);
+        // A public URL is being played. Everyone should sync to this.
+        if (localVideoUrlRef.current) {
+            URL.revokeObjectURL(localVideoUrlRef.current);
+            localVideoUrlRef.current = null;
         }
+        if (videoSrc !== data.videoUrl) {
+            setVideoSrc(data.videoUrl);
+        }
+        setLocalFileName(data.fileName); // Store filename for display
       } else if (data?.fileName) {
-        // It's a local file, identified by file name
+        // A local file is being played.
         if (videoSrc && !localVideoUrlRef.current) {
-            // Switched from a URL to local file, clear the source
+            // A remote user switched from a URL to a local file.
+            // Clear our public URL src so we can be prompted to select the file.
             setVideoSrc(null);
         }
         setLocalFileName(data.fileName);
       } else {
-        // No video is set in the room
-        if (videoSrc) {
-            if (localVideoUrlRef.current) {
-                URL.revokeObjectURL(localVideoUrlRef.current);
-                localVideoUrlRef.current = null;
-            }
-            setVideoSrc(null);
-            setLocalFileName(null);
+        // No video is set in the room. Reset everything.
+        if (localVideoUrlRef.current) {
+            URL.revokeObjectURL(localVideoUrlRef.current);
+            localVideoUrlRef.current = null;
         }
+        setVideoSrc(null);
+        setLocalFileName(null);
       }
 
       if (videoRef.current && data) {
@@ -581,7 +580,8 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     );
   }
 
-  const isPlaybackDisabled = roomState?.fileName && !localVideoUrlRef.current;
+  // A user is sharing a local file, but this user hasn't selected it yet.
+  const isPlaybackDisabled = roomState?.fileName && !roomState.videoUrl && !localVideoUrlRef.current;
   
   if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
 
