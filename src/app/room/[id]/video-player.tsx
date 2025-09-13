@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   X,
   Link as LinkIcon,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -399,9 +400,8 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
 
   const loadOnlineSubtitle = (subtitle: SubtitleSearchResult) => {
     addTrackToVideo(subtitle.url, subtitle.fileName, subtitle.language, false);
-    setSubtitleSearchResults([]); // Clear results after loading
-    setSearchStep('movie');
-    setMovieSearchResults([]);
+    resetSearch();
+    toast({ title: 'Subtitle Loaded', description: `${subtitle.fileName} has been added.`});
   }
 
   const resetSearch = () => {
@@ -637,6 +637,24 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
             <div className="flex items-center gap-1">
                 <Popover>
                     <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Info /></Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96" align="end">
+                        <div className="grid gap-3 p-2">
+                            <h4 className="font-medium leading-none">Video Info</h4>
+                            <div className="text-sm space-y-2">
+                                <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{roomState?.fileName ?? 'N/A'}</span></p>
+                                <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
+                                <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
+                                <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
+                                <p><span className="font-semibold">Audio Tracks:</span> <span className="text-muted-foreground">{audioTracks.length}</span></p>
+                                <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
+                <Popover>
+                    <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Settings /></Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-96" align="end">
@@ -671,7 +689,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                                 {searchStep === 'movie' && (
                                   <form onSubmit={handleMovieSearch} className="flex gap-2">
                                       <Input 
-                                          placeholder={roomState?.fileName || 'e.g., Inception'}
+                                          placeholder={localFileName || roomState?.fileName || 'e.g., Inception'}
                                           value={searchQuery}
                                           onChange={(e) => setSearchQuery(e.target.value)}
                                           className="bg-input"
@@ -818,3 +836,5 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
+
+    
