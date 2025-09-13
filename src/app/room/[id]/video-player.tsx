@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -128,8 +127,9 @@ const srtToVtt = (srtText: string): string => {
         i++;
       }
       vtt += text.trim() + "\n\n";
+    } else {
+        i++;
     }
-    i++;
   }
   return vtt;
 };
@@ -199,14 +199,15 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
               if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
               localVideoUrlRef.current = null;
               setVideoSrc(data.videoUrl);
-              setLocalFileName(null);
+              setLocalFileName(data.fileName); // URL might have a "filename"
           }
       } 
       // If a local file is being played from remote
       else if (data?.fileName) {
           // If the current user isn't the one playing the local file, clear videoSrc
-          if (!localVideoUrlRef.current && videoSrc) {
+          if (!localVideoUrlRef.current && videoSrc && videoSrc !== localVideoUrlRef.current) {
             setVideoSrc(null);
+            setLocalFileName(null);
           }
       } 
       // If no video is in the room
@@ -874,3 +875,5 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
+
+    
