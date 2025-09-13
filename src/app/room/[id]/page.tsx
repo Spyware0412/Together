@@ -114,29 +114,9 @@ export default function RoomPage() {
     setIsResolvingUrl(true);
 
     try {
-        let resolvedUrl = videoUrl;
-        let videoTitle: string | null = null;
-        
-        // Check if it's a YouTube URL
-        if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
-            const res = await fetch(`/api/youtube?url=${encodeURIComponent(videoUrl)}`);
-            const data = await res.json();
-            
-            if (res.ok && data.videoUrl) {
-                resolvedUrl = data.videoUrl;
-                videoTitle = data.title;
-                 toast({
-                    title: 'YouTube Video Loaded',
-                    description: `Now playing: ${data.title}`,
-                });
-            } else {
-                throw new Error(data.error || 'Failed to resolve YouTube URL.');
-            }
-        }
-
         set(roomStateRef, {
-            videoUrl: resolvedUrl,
-            fileName: videoTitle,
+            videoUrl: videoUrl,
+            fileName: new URL(videoUrl).pathname.split('/').pop() || videoUrl,
             isPlaying: false,
             progress: 0,
         });
