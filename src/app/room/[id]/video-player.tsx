@@ -192,22 +192,25 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       setIsLoading(false);
       isRemoteUpdate.current = true;
       setRoomState(data);
-
+      
+      // If a URL is being played from remote
       if (data?.videoUrl) {
-          // A URL is being played
           if (videoSrc !== data.videoUrl) {
               if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
               localVideoUrlRef.current = null;
               setVideoSrc(data.videoUrl);
               setLocalFileName(null);
           }
-      } else if (data?.fileName) {
-          // A local file is being played. Only change videoSrc if it's not already set by the local user.
+      } 
+      // If a local file is being played from remote
+      else if (data?.fileName) {
+          // If the current user isn't the one playing the local file, clear videoSrc
           if (!localVideoUrlRef.current && videoSrc) {
             setVideoSrc(null);
           }
-      } else {
-          // No video in the room
+      } 
+      // If no video is in the room
+      else {
           if (videoSrc) {
              if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
              localVideoUrlRef.current = null;
@@ -592,7 +595,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   
   const hasVideoSource = !!videoSrc;
 
-  if (!hasVideoSource && !roomState?.fileName) {
+  if (!hasVideoSource && !roomState?.fileName && !roomState?.videoUrl) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Film className="w-16 h-16 text-muted-foreground" />
@@ -606,7 +609,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     );
   }
 
-  const isPlaybackDisabled = roomState?.fileName && !localFileName;
+  const isPlaybackDisabled = roomState?.fileName && !localVideoUrlRef.current;
   
   if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
 
@@ -871,5 +874,3 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
-
-    

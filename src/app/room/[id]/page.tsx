@@ -102,7 +102,7 @@ export default function RoomPage() {
         const url = new URL(videoUrl);
         set(roomStateRef, {
           videoUrl: url.href,
-          fileName: url.pathname.split('/').pop() || 'Video from URL',
+          fileName: null,
           isPlaying: false,
           progress: 0,
         });
