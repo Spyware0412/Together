@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
@@ -31,8 +32,9 @@ interface UserProfile {
     online?: boolean;
 }
 
-export default function RoomPage({ params }: { params: { id: string } }) {
-  const roomId = params.id;
+export default function RoomPage() {
+  const params = useParams();
+  const roomId = params.id as string;
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [lastMessage, setLastMessage] = useState<Message | null>(null);
   const [showNotification, setShowNotification] = useState(false);
@@ -41,6 +43,7 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const initialLoadRef = useRef(true);
 
   useEffect(() => {
+    if (!roomId) return;
     const usersRef = ref(database, `rooms/${roomId}/users`);
     
     const onUsersChange = (snapshot: any) => {
@@ -93,6 +96,10 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const closeNotification = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     setShowNotification(false);
+  }
+
+  if (!roomId) {
+    return null; // Or a loading state
   }
 
   return (
