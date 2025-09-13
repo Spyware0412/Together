@@ -148,9 +148,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
 
   const { toast } = useToast();
   const [textTracks, setTextTracks] = useState<TextTrack[]>([]);
-  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [selectedTextTrack, setSelectedTextTrack] = useState<string>("off");
-  const [selectedAudioTrack, setSelectedAudioTrack] = useState<string>("");
   const [subtitleSettings, setSubtitleSettings] = useState<SubtitleSettings>({
     fontSize: 1,
     color: "#FFFFFF",
@@ -307,18 +305,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
         availableTextTracks.forEach(track => {
             track.mode = (track.label === selectedTextTrack || track.id === selectedTextTrack) ? 'showing' : 'hidden';
         });
-      }
-
-      if (video.audioTracks) {
-          const availableAudioTracks = Array.from(video.audioTracks);
-          setAudioTracks(availableAudioTracks);
-          const enabledAudioTrack = availableAudioTracks.find(t => t.enabled);
-          if(enabledAudioTrack) {
-              setSelectedAudioTrack(enabledAudioTrack.id);
-          } else if (availableAudioTracks.length > 0) {
-              availableAudioTracks[0].enabled = true;
-              setSelectedAudioTrack(availableAudioTracks[0].id);
-          }
       }
     }, 500);
   }, [selectedTextTrack]);
@@ -494,23 +480,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
         textTracks.forEach(t => t.mode = 'hidden');
     }
   }, [selectedTextTrack, textTracks]);
-
-  useEffect(() => {
-    if (videoRef.current?.audioTracks) {
-        const handleAudioTrackChange = () => {
-            const enabledTrack = Array.from(videoRef.current!.audioTracks).find(t => t.enabled);
-            if (enabledTrack) setSelectedAudioTrack(enabledTrack.id);
-        };
-        videoRef.current.audioTracks.addEventListener('change', handleAudioTrackChange);
-        return () => videoRef.current?.audioTracks.removeEventListener('change', handleAudioTrackChange);
-    }
-  }, [videoSrc]);
-
-
-  const handleAudioTrackChange = (trackId: string) => {
-    audioTracks.forEach((track) => { track.enabled = track.id === trackId; });
-    setSelectedAudioTrack(trackId);
-  };
   
   useEffect(() => {
     const styleId = 'cinesync-subtitle-styles';
@@ -686,7 +655,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                                 <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
                                 <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
                                 <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
-                                <p><span className="font-semibold">Audio Tracks:</span> <span className="text-muted-foreground">{audioTracks.length}</span></p>
                                 <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
                             </div>
                         </div>
@@ -813,22 +781,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                                 </div>
                               </>
                             )}
-                            {audioTracks.length > 1 && (
-                                <>
-                                  <Separator />
-                                  <div className="grid gap-2">
-                                      <Label className="font-medium leading-none">Audio Track</Label>
-                                      <Select onValueChange={handleAudioTrackChange} value={selectedAudioTrack}>
-                                          <SelectTrigger className="w-full"><SelectValue placeholder="Select audio track" /></SelectTrigger>
-                                          <SelectContent>
-                                              {audioTracks.map((track, i) => (
-                                                  <SelectItem key={track.id || `audio-${i}`} value={track.id}>{track.label || `Track ${i+1}`} ({track.language})</SelectItem>
-                                              ))}
-                                          </SelectContent>
-                                      </Select>
-                                  </div>
-                                </>
-                            )}
                         </div>
                     </PopoverContent>
                 </Popover>
@@ -875,5 +827,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
+
+    
 
     
