@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -17,6 +18,7 @@ import {
   Download,
   ArrowLeft,
   X,
+  Link as LinkIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -32,7 +34,6 @@ import {
   serverTimestamp,
 } from "firebase/database";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { v4 as uuidv4 } from "uuid";
 import {
   Popover,
   PopoverContent,
@@ -74,6 +75,7 @@ interface VideoPlayerProps {
 }
 
 interface RoomState {
+  videoUrl: string | null;
   fileName: string | null;
   isPlaying: boolean;
   progress: number;
@@ -132,7 +134,7 @@ const srtToVtt = (srtText: string): string => {
 
 export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificationClick, onCloseNotification }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [localFileName, setLocalFileName] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
 
   const [volume, setVolume] = useState(1);
@@ -161,6 +163,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   const [selectedMovie, setSelectedMovie] = useState<TmdbMovieSearchResult | null>(null);
 
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
+  const localVideoUrlRef = useRef<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
@@ -189,8 +192,15 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
 
+      if (data?.videoUrl && videoSrc !== data.videoUrl) {
+          if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
+          localVideoUrlRef.current = null;
+          setVideoSrc(data.videoUrl);
+          setLocalFileName(null);
+      }
+
       if (videoRef.current && data) {
-        if (data.fileName && fileName === data.fileName) {
+        if (data.fileName && (localFileName === data.fileName || data.videoUrl)) {
           const serverTime = data.progress ?? 0;
           const clientTime = videoRef.current.currentTime;
           if (Math.abs(serverTime - clientTime) > 2) {
@@ -217,8 +227,9 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
           onDisconnect(userStatusRef).cancel();
           update(userStatusRef, { online: false, last_seen: serverTimestamp() });
       }
+      if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
     };
-  }, [roomId, fileName]);
+  }, [roomId, videoSrc]);
 
   const syncState = useCallback((state: Partial<RoomState>) => {
       if (isRemoteUpdate.current) return;
@@ -228,17 +239,19 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (videoSrc) URL.revokeObjectURL(videoSrc);
+      if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
       externalSubtitlesRef.current.forEach(URL.revokeObjectURL);
       externalSubtitlesRef.current.clear();
       
       const newVideoSrc = URL.createObjectURL(file);
+      localVideoUrlRef.current = newVideoSrc;
       setVideoSrc(newVideoSrc);
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
       setSearchQuery(cleanFileName);
-      setFileName(file.name);
+      setLocalFileName(file.name);
       
       set(roomStateRef, {
+        videoUrl: null,
         fileName: file.name,
         isPlaying: false,
         progress: 0,
@@ -399,7 +412,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   }
 
   const togglePlay = () => {
-    if (!videoRef.current || fileName !== roomState?.fileName) return;
+    if (!videoRef.current || isPlaybackDisabled) return;
     syncState({ isPlaying: videoRef.current.paused });
   };
 
@@ -557,16 +570,16 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     );
   }
 
-  if (!videoSrc) {
+  if (!videoSrc && !roomState?.videoUrl) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Film className="w-16 h-16 text-muted-foreground" />
         <h2 className="text-2xl font-bold">{roomState?.fileName ? "Join the session" : "Select a video to start"}</h2>
         <p className="text-muted-foreground max-w-sm">
           {roomState?.fileName ? (
-            <>The group is watching <span className="font-bold text-foreground">{roomState?.fileName}</span>. Choose the same file to join in.</>
+            <>The group is watching <span className="font-bold text-foreground">{roomState?.fileName}</span>. Choose the same file or wait for the host to share a URL.</>
           ) : (
-            "Choose a video file to begin the watch party. Playback will sync with others who load the same file."
+            "Choose a video file or load a URL to begin the watch party. Playback will sync with others."
           )}
         </p>
         <Button asChild className="mt-4"><label htmlFor="video-upload" className="cursor-pointer">Choose Video File</label></Button>
@@ -575,20 +588,21 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     );
   }
 
-  const isPlaybackDisabled = fileName !== roomState?.fileName;
+  const isPlaybackDisabled = roomState?.fileName && !roomState.videoUrl && localFileName !== roomState.fileName;
+
   if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
 
   return (
     <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <video ref={videoRef} src={videoSrc} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" />
+      <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" />
       
-      {isPlaybackDisabled && roomState?.fileName && (
+      {isPlaybackDisabled && (
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
           <Alert variant="destructive" className="max-w-md">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>File Mismatch</AlertTitle>
             <AlertDescription>
-              The video you selected (<span className="font-bold">{fileName}</span>) is different from the one being played in the room (<span className="font-bold">{roomState.fileName}</span>). Please select the correct file to sync with the group.
+              The video you selected (<span className="font-bold">{localFileName}</span>) is different from the one being played in the room (<span className="font-bold">{roomState?.fileName}</span>). Please select the correct file to sync with the group.
             </AlertDescription>
             <div className="mt-4">
               <Button asChild variant="secondary"><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Correct Video File</label></Button>
@@ -657,7 +671,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                                 {searchStep === 'movie' && (
                                   <form onSubmit={handleMovieSearch} className="flex gap-2">
                                       <Input 
-                                          placeholder="e.g., Inception"
+                                          placeholder={roomState?.fileName || 'e.g., Inception'}
                                           value={searchQuery}
                                           onChange={(e) => setSearchQuery(e.target.value)}
                                           className="bg-input"

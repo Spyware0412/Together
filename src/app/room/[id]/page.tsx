@@ -7,12 +7,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, LogOut } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
-import { ref, onValue, off, update, serverTimestamp } from 'firebase/database';
+import { ref, onValue, off, update, serverTimestamp, set } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface Message {
     id: string;
@@ -41,9 +44,13 @@ export default function RoomPage() {
   const [lastMessage, setLastMessage] = useState<Message | null>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
+  const [isUrlDialogOpen, setIsUrlDialogOpen] = useState(false);
+  const [videoUrl, setVideoUrl] = useState('');
+  
   const { toast } = useToast();
   const initialLoadRef = useRef(true);
   const userStatusRef = useRef<any>(null);
+  const roomStateRef = ref(database, `rooms/${roomId}/video`);
 
   useEffect(() => {
     if (!roomId) return;
@@ -87,6 +94,28 @@ export default function RoomPage() {
       }
     };
   }, [roomId, activeUsers, toast]);
+
+  const handleSetVideoUrl = () => {
+    if(videoUrl.trim()){
+      // Validate URL roughly
+      try {
+        new URL(videoUrl);
+        set(roomStateRef, {
+          videoUrl: videoUrl,
+          fileName: new URL(videoUrl).pathname.split('/').pop() || 'Video from URL',
+          isPlaying: false,
+          progress: 0,
+        });
+        setIsUrlDialogOpen(false);
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Invalid URL',
+          description: 'Please enter a valid video URL.',
+        })
+      }
+    }
+  }
 
 
   const handleNewMessage = useCallback((message: Message) => {
@@ -135,7 +164,39 @@ export default function RoomPage() {
                 </h1>
             </div>
             <div className="flex items-center gap-4">
-              <div className="hidden md:flex items-center gap-2 text-muted-foreground">
+               <Dialog open={isUrlDialogOpen} onOpenChange={setIsUrlDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <LinkIcon className="w-4 h-4 mr-2" />
+                    Load URL
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Play from URL</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="video-url" className="text-right">
+                        URL
+                      </Label>
+                      <Input
+                        id="video-url"
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        placeholder="https://example.com/video.mp4"
+                        className="col-span-3 bg-input"
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleSetVideoUrl}>
+                    <Play className="w-4 h-4 mr-2" />
+                    Play Video
+                  </Button>
+                </DialogContent>
+              </Dialog>
+
+              <div className="flex items-center gap-2 text-muted-foreground">
                   <Users className="w-5 h-5"/>
                   <span>{activeUsers.length} watching</span>
               </div>
