@@ -1,4 +1,4 @@
-import { AuthButtons } from '@/components/auth-buttons';
+import { AuthForm } from '@/components/auth-form';
 import { RoomForm } from '@/components/room-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from '@/components/ui/separator';
@@ -18,7 +18,7 @@ export default function Home() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AuthButtons />
+          <AuthForm />
           <div className="my-6 flex items-center">
             <Separator className="flex-1" />
             <span className="mx-4 text-xs text-muted-foreground">OR</span>
@@ -28,7 +28,7 @@ export default function Home() {
         </CardContent>
       </Card>
       <footer className="absolute bottom-4 text-center text-xs text-muted-foreground">
-        <p>Build for Manoshi</p>
+        <p>Built for Manoshi</p>
       </footer>
     </main>
   );
