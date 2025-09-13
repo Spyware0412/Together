@@ -1,16 +1,17 @@
 
+
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare, LogOut } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
-import { ref, onValue, off } from 'firebase/database';
+import { ref, onValue, off, update, serverTimestamp } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
@@ -34,6 +35,7 @@ interface UserProfile {
 
 export default function RoomPage() {
   const params = useParams();
+  const router = useRouter();
   const roomId = params.id as string;
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [lastMessage, setLastMessage] = useState<Message | null>(null);
@@ -41,11 +43,18 @@ export default function RoomPage() {
   const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
   const { toast } = useToast();
   const initialLoadRef = useRef(true);
+  const userStatusRef = useRef<any>(null);
 
   useEffect(() => {
     if (!roomId) return;
     const usersRef = ref(database, `rooms/${roomId}/users`);
+    const storedUser = localStorage.getItem('cinesync_user');
     
+    if (storedUser) {
+        const user: UserProfile = JSON.parse(storedUser);
+        userStatusRef.current = ref(database, `rooms/${roomId}/users/${user.id}`);
+    }
+
     const onUsersChange = (snapshot: any) => {
       const usersData = snapshot.val();
       const userList: UserProfile[] = usersData ? Object.values(usersData).filter((u: any) => u.online) : [];
@@ -73,6 +82,9 @@ export default function RoomPage() {
 
     return () => {
       off(usersRef, 'value', onUsersChange);
+      if (userStatusRef.current) {
+        update(userStatusRef.current, { online: false, last_seen: serverTimestamp() });
+      }
     };
   }, [roomId, activeUsers, toast]);
 
@@ -98,6 +110,16 @@ export default function RoomPage() {
     setShowNotification(false);
   }
 
+  const handleLeaveRoom = () => {
+    if (userStatusRef.current) {
+      update(userStatusRef.current, { online: false, last_seen: serverTimestamp() }).then(() => {
+        router.push('/');
+      });
+    } else {
+      router.push('/');
+    }
+  };
+
   if (!roomId) {
     return null; // Or a loading state
   }
@@ -117,6 +139,9 @@ export default function RoomPage() {
                   <Users className="w-5 h-5"/>
                   <span>{activeUsers.length} watching</span>
               </div>
+              <Button variant="ghost" size="icon" onClick={handleLeaveRoom} title="Leave Room">
+                  <LogOut className="w-5 h-5 text-muted-foreground" />
+              </Button>
               <div className="md:hidden">
                 <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                   <SheetTrigger asChild>
