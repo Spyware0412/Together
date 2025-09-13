@@ -16,6 +16,7 @@ import {
   Search,
   Download,
   ArrowLeft,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -51,9 +52,25 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
+import { AnimatePresence, motion } from "framer-motion";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+interface Message {
+    id: string;
+    user: {
+        id: string;
+        name: string;
+        avatar: string;
+    };
+    text: string;
+}
 
 interface VideoPlayerProps {
   roomId: string;
+  lastMessage: Message | null;
+  showNotification: boolean;
+  onNotificationClick: () => void;
+  onCloseNotification: (e?: React.MouseEvent) => void;
 }
 
 interface RoomState {
@@ -105,7 +122,7 @@ const srtToVtt = (srtText: string): string => {
   return vtt;
 };
 
-export function VideoPlayer({ roomId }: VideoPlayerProps) {
+export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificationClick, onCloseNotification }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
@@ -735,6 +752,40 @@ export function VideoPlayer({ roomId }: VideoPlayerProps) {
           </div>
         </div>
       </div>
+      
+      <AnimatePresence>
+        {showNotification && lastMessage && (
+            <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                transition={{ ease: "easeInOut", duration: 0.3 }}
+                className="absolute bottom-20 right-5 z-50"
+            >
+                <div 
+                    className="p-3 rounded-lg bg-popover border border-border shadow-2xl cursor-pointer w-80"
+                    onClick={onNotificationClick}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold">New Message</p>
+                        <Button variant="ghost" size="icon" className="w-6 h-6" onClick={onCloseNotification}>
+                            <X className="w-4 h-4"/>
+                        </Button>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <Avatar className="w-8 h-8 border">
+                            <AvatarImage src={lastMessage.user.avatar} alt={lastMessage.user.name} />
+                            <AvatarFallback>{lastMessage.user.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                            <p className="font-semibold text-sm">{lastMessage.user.name}</p>
+                            <p className="text-sm text-muted-foreground truncate">{lastMessage.text}</p>
+                        </div>
+                    </div>
+                </div>
+            </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

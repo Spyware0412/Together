@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 interface Message {
     id: string;
     user: {
+        id: string;
         name: string;
         avatar: string;
     };
@@ -26,13 +27,14 @@ export default function RoomPage({ params }: { params: { id: string } }) {
   const [showNotification, setShowNotification] = useState(false);
 
   const handleNewMessage = useCallback((message: Message) => {
-    // Only show notification if the sheet is closed
+    // Only show notification if the sheet is closed and player is active
     if (!isSheetOpen) {
       setLastMessage(message);
       setShowNotification(true);
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setShowNotification(false);
-      }, 3000);
+      }, 5000);
+      return () => clearTimeout(timer);
     }
   }, [isSheetOpen]);
 
@@ -40,6 +42,11 @@ export default function RoomPage({ params }: { params: { id: string } }) {
     setShowNotification(false);
     setIsSheetOpen(true);
   };
+  
+  const closeNotification = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setShowNotification(false);
+  }
 
   return (
     <div className="flex h-screen max-h-screen bg-background text-foreground overflow-hidden relative">
@@ -79,7 +86,13 @@ export default function RoomPage({ params }: { params: { id: string } }) {
             </div>
         </header>
         <div className="flex-1 w-full h-full min-h-0 rounded-lg overflow-hidden">
-          <VideoPlayer roomId={roomId} />
+          <VideoPlayer 
+            roomId={roomId}
+            lastMessage={lastMessage}
+            showNotification={showNotification}
+            onNotificationClick={handleNotificationClick}
+            onCloseNotification={closeNotification}
+          />
         </div>
       </main>
       <aside className="w-[350px] bg-card border-l border-border flex-col hidden md:flex">
@@ -90,40 +103,6 @@ export default function RoomPage({ params }: { params: { id: string } }) {
           <ContentSuggester />
         </div>
       </aside>
-
-      <AnimatePresence>
-        {showNotification && lastMessage && (
-            <motion.div
-                initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                transition={{ ease: "easeInOut", duration: 0.3 }}
-                className="fixed bottom-5 right-5 z-50"
-            >
-                <div 
-                    className="p-3 rounded-lg bg-popover border border-border shadow-2xl cursor-pointer w-80"
-                    onClick={handleNotificationClick}
-                >
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-sm font-semibold">New Message</p>
-                        <Button variant="ghost" size="icon" className="w-6 h-6" onClick={(e) => { e.stopPropagation(); setShowNotification(false); }}>
-                            <X className="w-4 h-4"/>
-                        </Button>
-                    </div>
-                    <div className="flex items-start gap-3">
-                        <Avatar className="w-8 h-8 border">
-                            <AvatarImage src={lastMessage.user.avatar} alt={lastMessage.user.name} />
-                            <AvatarFallback>{lastMessage.user.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                            <p className="font-semibold text-sm">{lastMessage.user.name}</p>
-                            <p className="text-sm text-muted-foreground truncate">{lastMessage.text}</p>
-                        </div>
-                    </div>
-                </div>
-            </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
