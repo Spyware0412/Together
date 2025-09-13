@@ -37,6 +37,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Popover,
   PopoverContent,
+  PopoverPortal,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
@@ -191,25 +192,20 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
       
-      // If a URL is being played from remote
-      if (data?.videoUrl) {
+      if (data?.videoUrl) { // Handle URL stream
           if (videoSrc !== data.videoUrl) {
               if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
               localVideoUrlRef.current = null;
               setVideoSrc(data.videoUrl);
-              setLocalFileName(data.fileName); // URL might have a "filename"
+              setLocalFileName(data.fileName); // Can be null, that's ok
           }
-      } 
-      // If a local file is being played from remote
-      else if (data?.fileName) {
-          // If the current user isn't the one playing the local file, clear videoSrc
-          if (!localVideoUrlRef.current && videoSrc && videoSrc !== localVideoUrlRef.current) {
+      } else if (data?.fileName) { // Handle local file
+          if (!localVideoUrlRef.current) { // Another user is playing a local file, I am not
             setVideoSrc(null);
             setLocalFileName(null);
           }
-      } 
-      // If no video is in the room
-      else {
+          // If localVideoUrlRef.current exists, it means this user is the one who chose the file, so we don't touch videoSrc
+      } else { // No video in the room
           if (videoSrc) {
              if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
              localVideoUrlRef.current = null;
@@ -647,142 +643,146 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                     <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Info /></Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-96" align="end">
-                        <div className="grid gap-3 p-2">
-                            <h4 className="font-medium leading-none">Video Info</h4>
-                            <div className="text-sm space-y-2">
-                                <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? roomState?.fileName ?? 'N/A'}</span></p>
-                                <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
-                                <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
-                                <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
-                                <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
+                    <PopoverPortal container={playerRef.current}>
+                        <PopoverContent className="w-96" align="end">
+                            <div className="grid gap-3 p-2">
+                                <h4 className="font-medium leading-none">Video Info</h4>
+                                <div className="text-sm space-y-2">
+                                    <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? roomState?.fileName ?? 'N/A'}</span></p>
+                                    <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
+                                    <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
+                                    <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
+                                    <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
+                                </div>
                             </div>
-                        </div>
-                    </PopoverContent>
+                        </PopoverContent>
+                    </PopoverPortal>
                 </Popover>
                 <Popover>
                     <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Settings /></Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-96" align="end">
-                        <div className="grid gap-4">
-                            <div className="grid gap-2">
-                                <Label className="font-medium leading-none">Subtitles</Label>
-                                <Select onValueChange={setSelectedTextTrack} value={selectedTextTrack}>
-                                    <SelectTrigger className="w-full"><SelectValue placeholder="Select subtitle" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="off">Off</SelectItem>
-                                        {textTracks.map((track, i) => (
-                                            <SelectItem key={track.id || `track-${i}`} value={track.label || `track-${i}`}>{track.label} ({track.language})</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <div className="flex items-center gap-2 pt-1">
-                                    <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload File</label></Button>
-                                    <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
+                    <PopoverPortal container={playerRef.current}>
+                        <PopoverContent className="w-96" align="end">
+                            <div className="grid gap-4">
+                                <div className="grid gap-2">
+                                    <Label className="font-medium leading-none">Subtitles</Label>
+                                    <Select onValueChange={setSelectedTextTrack} value={selectedTextTrack}>
+                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select subtitle" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="off">Off</SelectItem>
+                                            {textTracks.map((track, i) => (
+                                                <SelectItem key={track.id || `track-${i}`} value={track.label || `track-${i}`}>{track.label} ({track.language})</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload File</label></Button>
+                                        <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
+                                    </div>
                                 </div>
-                            </div>
-                            <Separator/>
-                             <div className="grid gap-2">
-                                <div className="flex items-center justify-between">
-                                  <Label className="font-medium leading-none">Search Subtitles Online</Label>
-                                  {searchStep === 'subtitle' && (
-                                    <Button variant="ghost" size="sm" onClick={resetSearch} className="flex items-center gap-1 text-xs h-auto p-1">
-                                      <ArrowLeft className="w-3 h-3" /> Back
-                                    </Button>
-                                  )}
-                                </div>
-                                
-                                {searchStep === 'movie' && (
-                                  <form onSubmit={handleMovieSearch} className="flex gap-2">
-                                      <Input 
-                                          placeholder={localFileName || roomState?.fileName || 'e.g., Inception'}
-                                          value={searchQuery}
-                                          onChange={(e) => setSearchQuery(e.target.value)}
-                                          className="bg-input"
-                                      />
-                                      <Button type="submit" size="icon" disabled={isSearching}>
-                                          {isSearching ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4" />}
-                                      </Button>
-                                  </form>
-                                )}
+                                <Separator/>
+                                 <div className="grid gap-2">
+                                    <div className="flex items-center justify-between">
+                                      <Label className="font-medium leading-none">Search Subtitles Online</Label>
+                                      {searchStep === 'subtitle' && (
+                                        <Button variant="ghost" size="sm" onClick={resetSearch} className="flex items-center gap-1 text-xs h-auto p-1">
+                                          <ArrowLeft className="w-3 h-3" /> Back
+                                        </Button>
+                                      )}
+                                    </div>
+                                    
+                                    {searchStep === 'movie' && (
+                                      <form onSubmit={handleMovieSearch} className="flex gap-2">
+                                          <Input 
+                                              placeholder={localFileName || roomState?.fileName || 'e.g., Inception'}
+                                              value={searchQuery}
+                                              onChange={(e) => setSearchQuery(e.target.value)}
+                                              className="bg-input"
+                                          />
+                                          <Button type="submit" size="icon" disabled={isSearching}>
+                                              {isSearching ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4" />}
+                                          </Button>
+                                      </form>
+                                    )}
 
-                                {isSearching && <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin"/></div>}
+                                    {isSearching && <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin"/></div>}
 
-                                {!isSearching && movieSearchResults.length > 0 && searchStep === 'movie' && (
-                                    <ScrollArea className="h-60 mt-2 border rounded-md">
-                                        <div className="p-2 space-y-2">
-                                        {movieSearchResults.map((movie) => (
-                                          <div
-                                            key={movie.id}
-                                            className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
-                                            onClick={() => handleSubtitleSearch(movie)}
-                                          >
-                                            <div className="w-12 flex-shrink-0">
-                                              <Image
-                                                  src={movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : 'https://picsum.photos/seed/1/92/138'}
-                                                  width={48}
-                                                  height={72}
-                                                  alt={`Poster for ${movie.title}`}
-                                                  className="rounded"
-                                                  unoptimized
-                                              />
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-sm">{movie.title}</p>
-                                                <p className="text-xs text-muted-foreground">{movie.release_date.split('-')[0]}</p>
-                                            </div>
-                                          </div>
-                                        ))}
-                                        </div>
-                                    </ScrollArea>
-                                )}
-                                
-                                {!isSearching && subtitleSearchResults.length > 0 && searchStep === 'subtitle' && (
-                                    <ScrollArea className="h-60 mt-2 border rounded-md">
-                                        <div className="p-2 space-y-2">
-                                          <div className="font-semibold text-sm p-2">Results for {selectedMovie?.title}</div>
-                                          {subtitleSearchResults.map((sub, i) => (
-                                            <div
-                                                key={i}
-                                                className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
-                                                onClick={() => loadOnlineSubtitle(sub)}
-                                            >
-                                                <div className="flex-1 truncate">
-                                                    <Badge variant="outline">{sub.language}</Badge>
-                                                    <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
+                                    {!isSearching && movieSearchResults.length > 0 && searchStep === 'movie' && (
+                                        <ScrollArea className="h-60 mt-2 border rounded-md">
+                                            <div className="p-2 space-y-2">
+                                            {movieSearchResults.map((movie) => (
+                                              <div
+                                                key={movie.id}
+                                                className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
+                                                onClick={() => handleSubtitleSearch(movie)}
+                                              >
+                                                <div className="w-12 flex-shrink-0">
+                                                  <Image
+                                                      src={movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : 'https://picsum.photos/seed/1/92/138'}
+                                                      width={48}
+                                                      height={72}
+                                                      alt={`Poster for ${movie.title}`}
+                                                      className="rounded"
+                                                      unoptimized
+                                                  />
                                                 </div>
-                                                <Download className="w-4 h-4"/>
+                                                <div className="flex-1">
+                                                    <p className="font-semibold text-sm">{movie.title}</p>
+                                                    <p className="text-xs text-muted-foreground">{movie.release_date.split('-')[0]}</p>
+                                                </div>
+                                              </div>
+                                            ))}
                                             </div>
-                                          ))}
-                                        </div>
-                                    </ScrollArea>
-                                )}
+                                        </ScrollArea>
+                                    )}
+                                    
+                                    {!isSearching && subtitleSearchResults.length > 0 && searchStep === 'subtitle' && (
+                                        <ScrollArea className="h-60 mt-2 border rounded-md">
+                                            <div className="p-2 space-y-2">
+                                              <div className="font-semibold text-sm p-2">Results for {selectedMovie?.title}</div>
+                                              {subtitleSearchResults.map((sub, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
+                                                    onClick={() => loadOnlineSubtitle(sub)}
+                                                >
+                                                    <div className="flex-1 truncate">
+                                                        <Badge variant="outline">{sub.language}</Badge>
+                                                        <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
+                                                    </div>
+                                                    <Download className="w-4 h-4"/>
+                                                </div>
+                                              ))}
+                                            </div>
+                                        </ScrollArea>
+                                    )}
 
-                            </div>
-
-                            {selectedTextTrack !== "off" && (
-                              <>
-                                <Separator />
-                                <div className="grid gap-4">
-                                  <Label className="font-medium leading-none">Subtitle Style</Label>
-                                  <div className="grid grid-cols-2 items-center gap-4">
-                                    <Label htmlFor="font-size">Font Size</Label>
-                                    <Slider id="font-size" value={[subtitleSettings.fontSize]} min={0.5} max={2.5} step={0.1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, fontSize: val }))} />
-                                  </div>
-                                  <div className="grid grid-cols-2 items-center gap-4">
-                                    <Label htmlFor="font-color">Font Color</Label>
-                                    <Input id="font-color" type="color" value={subtitleSettings.color} onChange={(e) => setSubtitleSettings(s => ({ ...s, color: e.target.value }))} className="p-1 h-8" />
-                                  </div>
-                                  <div className="grid grid-cols-2 items-center gap-4">
-                                    <Label htmlFor="position">Position</Label>
-                                    <Slider id="position" value={[subtitleSettings.position]} min={0} max={80} step={1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, position: val }))} />
-                                  </div>
                                 </div>
-                              </>
-                            )}
-                        </div>
-                    </PopoverContent>
+
+                                {selectedTextTrack !== "off" && (
+                                  <>
+                                    <Separator />
+                                    <div className="grid gap-4">
+                                      <Label className="font-medium leading-none">Subtitle Style</Label>
+                                      <div className="grid grid-cols-2 items-center gap-4">
+                                        <Label htmlFor="font-size">Font Size</Label>
+                                        <Slider id="font-size" value={[subtitleSettings.fontSize]} min={0.5} max={2.5} step={0.1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, fontSize: val }))} />
+                                      </div>
+                                      <div className="grid grid-cols-2 items-center gap-4">
+                                        <Label htmlFor="font-color">Font Color</Label>
+                                        <Input id="font-color" type="color" value={subtitleSettings.color} onChange={(e) => setSubtitleSettings(s => ({ ...s, color: e.target.value }))} className="p-1 h-8" />
+                                      </div>
+                                      <div className="grid grid-cols-2 items-center gap-4">
+                                        <Label htmlFor="position">Position</Label>
+                                        <Slider id="position" value={[subtitleSettings.position]} min={0} max={80} step={1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, position: val }))} />
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                            </div>
+                        </PopoverContent>
+                    </PopoverPortal>
                 </Popover>
 
               <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/20 hover:text-white"><Maximize /></Button>
@@ -827,7 +827,3 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
-
-    
-
-    
