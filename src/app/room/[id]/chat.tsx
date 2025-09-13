@@ -4,13 +4,12 @@ import { useState, useRef, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar, ScrollAreaViewport } from '@/components/ui/scroll-area';
 import { Send, Settings, User } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { database } from '@/lib/firebase';
 import { ref, onValue, push, serverTimestamp, off } from 'firebase/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 
 interface Message {
     id: string;
@@ -152,23 +151,25 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
                     </DialogContent>
                 </Dialog>
             </CardHeader>
-            <ScrollArea className="flex-1 px-4" viewportRef={viewportRef}>
-                <div className="space-y-4 pb-4">
-                    {messages.map((message) => (
-                        <div key={message.id} className="flex items-start gap-3">
-                            <Avatar className="w-8 h-8 border">
-                                <AvatarImage src={message.user.avatar} alt={message.user.name} />
-                                <AvatarFallback>{message.user.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                                <p className="font-semibold text-sm">{message.user.id === user.id ? "You" : message.user.name}</p>
-                                <div className="text-sm bg-secondary p-2 rounded-lg mt-1 w-fit max-w-full">
-                                    <p className="break-words">{message.text}</p>
+            <ScrollArea className="flex-1">
+                <ScrollAreaViewport ref={viewportRef} className="px-4">
+                    <div className="space-y-4 pb-4">
+                        {messages.map((message) => (
+                            <div key={message.id} className="flex items-start gap-3">
+                                <Avatar className="w-8 h-8 border">
+                                    <AvatarImage src={message.user.avatar} alt={message.user.name} />
+                                    <AvatarFallback>{message.user.name.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                    <p className="font-semibold text-sm">{message.user.id === user.id ? "You" : message.user.name}</p>
+                                    <div className="text-sm bg-secondary p-2 rounded-lg mt-1 w-fit max-w-full">
+                                        <p className="break-words">{message.text}</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                </ScrollAreaViewport>
                  <ScrollBar />
             </ScrollArea>
             <div className="p-4 border-t">
