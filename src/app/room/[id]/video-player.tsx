@@ -35,10 +35,10 @@ import {
 } from "firebase/database";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -191,20 +191,19 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
       
-      if (data?.videoUrl) { // Handle URL stream
+      if (data?.videoUrl) { 
           if (videoSrc !== data.videoUrl) {
               if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
               localVideoUrlRef.current = null;
               setVideoSrc(data.videoUrl);
-              setLocalFileName(data.fileName); // Can be null, that's ok
+              setLocalFileName(data.fileName);
           }
-      } else if (data?.fileName) { // Handle local file
-          if (!localVideoUrlRef.current) { // Another user is playing a local file, I am not
+      } else if (data?.fileName) { 
+          if (!localVideoUrlRef.current) { 
             setVideoSrc(null);
             setLocalFileName(data.fileName);
           }
-          // If localVideoUrlRef.current exists, it means this user is the one who chose the file, so we don't touch videoSrc
-      } else { // No video in the room
+      } else { 
           if (videoSrc) {
              if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
              localVideoUrlRef.current = null;
@@ -252,21 +251,19 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Clean up old state
       if (localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
       externalSubtitlesRef.current.forEach(URL.revokeObjectURL);
       externalSubtitlesRef.current.clear();
       
       const newVideoSrc = URL.createObjectURL(file);
-      localVideoUrlRef.current = newVideoSrc; // Store the object URL
+      localVideoUrlRef.current = newVideoSrc;
       
-      setVideoSrc(newVideoSrc); // Set it to video element src
+      setVideoSrc(newVideoSrc);
       
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
       setSearchQuery(cleanFileName);
-      setLocalFileName(file.name); // Keep track of the local file name
+      setLocalFileName(file.name); 
       
-      // Update Firebase with filename only, NO videoUrl for local files
       set(roomStateRef, {
         fileName: file.name,
         isPlaying: false,
@@ -638,11 +635,11 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
             </div>
 
             <div className="flex items-center gap-1">
-                <Popover modal={true}>
-                    <PopoverTrigger asChild>
+                <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Info /></Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-96" align="end">
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-96" align="end">
                         <div className="grid gap-3 p-2">
                             <h4 className="font-medium leading-none">Video Info</h4>
                             <div className="text-sm space-y-2">
@@ -653,14 +650,14 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                                 <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
                             </div>
                         </div>
-                    </PopoverContent>
-                </Popover>
-                <Popover modal={true}>
-                    <PopoverTrigger asChild>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Settings /></Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-96" align="end">
-                        <div className="grid gap-4">
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-96" align="end">
+                        <div className="grid gap-4 p-2">
                             <div className="grid gap-2">
                                 <Label className="font-medium leading-none">Subtitles</Label>
                                 <Select onValueChange={setSelectedTextTrack} value={selectedTextTrack}>
@@ -777,8 +774,8 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                               </>
                             )}
                         </div>
-                    </PopoverContent>
-                </Popover>
+                    </DropdownMenuContent>
+                </DropdownMenu>
 
               <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/20 hover:text-white"><Maximize /></Button>
             </div>
