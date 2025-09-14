@@ -9,12 +9,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar, ScrollAreaViewport } from '@/components/ui/scroll-area';
-import { Send, Settings, User, SmilePlus, Search, Shield, Users, Sun, Moon, LogOut } from 'lucide-react';
+import { Send, Settings, User, SmilePlus, Search, Shield } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { database } from '@/lib/firebase';
 import { ref, push, serverTimestamp } from 'firebase/database';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useDebounce } from '@/hooks/use-debounce';
 import { ProfileSettings } from '@/components/profile-settings';
 import type { UserProfile } from '@/components/auth-form';
@@ -44,12 +43,9 @@ interface ChatProps {
     roomId: string;
     messages: Message[];
     activeUsers: UserProfile[];
-    theme: string;
-    toggleTheme: () => void;
-    handleLeaveRoom: () => void;
 }
 
-export function Chat({ roomId, messages, activeUsers, theme, toggleTheme, handleLeaveRoom }: ChatProps) {
+export function Chat({ roomId, messages, activeUsers }: ChatProps) {
     const [newMessage, setNewMessage] = useState('');
     const [user, setUser] = useState<UserProfile | null>(null);
 
@@ -134,61 +130,8 @@ export function Chat({ roomId, messages, activeUsers, theme, toggleTheme, handle
 
     return (
         <div className="h-full flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
+            <CardHeader>
                  <CardTitle>Live Chat</CardTitle>
-                 <div className="flex items-center gap-1">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" title={`${activeUsers.length} users watching`}>
-                                <Users className="w-5 h-5"/>
-                                <span className="sr-only">Users in Room</span>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-64 max-w-[80vw]" align="end">
-                        <DropdownMenuLabel>Watching Now ({activeUsers.length})</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {activeUsers.length > 0 ? (
-                            activeUsers.map(u => (
-                            <DropdownMenuItem key={u.id} className="gap-2">
-                                <Avatar className="w-6 h-6">
-                                    <AvatarImage src={u.avatar} alt={u.name} />
-                                    <AvatarFallback>{u.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <span className="truncate">{u.name}</span>
-                            </DropdownMenuItem>
-                            ))
-                        ) : (
-                            <DropdownMenuItem disabled>No other users online</DropdownMenuItem>
-                        )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
-                     <Button variant="ghost" size="icon" onClick={toggleTheme} title="Toggle Theme">
-                        <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                        <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                        <span className="sr-only">Toggle theme</span>
-                    </Button>
-                    
-                    <ProfileSettings 
-                        user={user} 
-                        setUser={setUser}
-                        trigger={
-                            <Button variant="ghost" size="icon" title="Settings">
-                                <Settings className="w-5 h-5" />
-                            </Button>
-                        }
-                    >
-                        <Button variant="secondary" asChild className="w-full">
-                            <Link href="/admin">
-                                <Shield className="mr-2 h-4 w-4" /> Admin Panel
-                            </Link>
-                        </Button>
-                    </ProfileSettings>
-
-                     <Button variant="ghost" size="icon" onClick={handleLeaveRoom} title="Leave Room">
-                        <LogOut className="w-5 h-5" />
-                     </Button>
-                </div>
             </CardHeader>
             <ScrollArea className="flex-1">
                 <ScrollAreaViewport ref={viewportRef} className="px-4">
@@ -232,7 +175,7 @@ export function Chat({ roomId, messages, activeUsers, theme, toggleTheme, handle
                                 <SmilePlus className="w-5 h-5"/>
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[90vw] max-w-sm" align="start">
+                        <PopoverContent className="w-80" align="start">
                             <div className="space-y-2">
                                 <div className="relative">
                                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
@@ -276,7 +219,3 @@ export function Chat({ roomId, messages, activeUsers, theme, toggleTheme, handle
         </div>
     );
 }
-
-    
-
-    
