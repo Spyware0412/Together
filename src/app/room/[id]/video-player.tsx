@@ -9,15 +9,12 @@ import {
   VolumeX,
   Maximize,
   Film,
-  Loader2,
-  AlertTriangle,
   Settings,
   Upload,
   Search,
   Download,
   ArrowLeft,
   X,
-  Link as LinkIcon,
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -682,12 +679,12 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                                           className="bg-input"
                                       />
                                       <Button type="submit" size="icon" disabled={isSearching}>
-                                          {isSearching ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4" />}
+                                          {isSearching ? <LoadingAnimation width="24px" height="24px" /> : <Search className="w-4 h-4" />}
                                       </Button>
                                   </form>
                                 )}
 
-                                {isSearching && <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin"/></div>}
+                                {isSearching && <div className="flex justify-center p-4"><LoadingAnimation width="60px" height="60px"/></div>}
 
                                 {!isSearching && movieSearchResults.length > 0 && searchStep === 'movie' && (
                                     <ScrollArea className="h-60 mt-2 border rounded-md">

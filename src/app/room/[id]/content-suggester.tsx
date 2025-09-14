@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -5,9 +6,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Wand2, Loader2, Sparkles } from 'lucide-react';
+import { Wand2, Sparkles } from 'lucide-react';
 import { suggestContent, SuggestContentOutput } from '@/ai/flows/suggest-content';
 import { Badge } from '@/components/ui/badge';
+import { LoadingAnimation } from '@/components/loading-animation';
 
 export function ContentSuggester() {
   const [description, setDescription] = useState('');
@@ -63,7 +65,7 @@ export function ContentSuggester() {
             />
             <Button onClick={handleSuggest} disabled={isLoading} className="w-full" variant="secondary">
               {isLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <LoadingAnimation width="24px" height="24px" />
               ) : (
                 <Sparkles className="mr-2 h-4 w-4" />
               )}

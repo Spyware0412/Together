@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Loader2, Sun, Moon } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Sun, Moon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Video } from 'lucide-react';
+import { LoadingAnimation } from '@/components/loading-animation';
 
 interface Message {
     id: string;
@@ -285,7 +286,7 @@ export default function RoomPage() {
                   </div>
                   <Button onClick={handleSetVideoUrl} disabled={isResolvingUrl}>
                     {isResolvingUrl ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <LoadingAnimation width="24px" height="24px" />
                     ) : (
                       <Play className="w-4 h-4 mr-2" />
                     )}

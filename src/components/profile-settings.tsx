@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, get, update } from 'firebase/database';
 import type { UserProfile } from './auth-form';
+import { LoadingAnimation } from './loading-animation';
 
 interface ProfileSettingsProps {
     user: UserProfile;
@@ -161,7 +162,7 @@ export function ProfileSettings({ user, setUser, trigger, children }: ProfileSet
                         disabled={isSaving || !newUsername.trim() || newUsername.trim() === user.name} 
                         className="w-full"
                     >
-                        {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+                        {isSaving ? <LoadingAnimation width="24px" height="24px" /> : <Save />}
                         Save Changes
                     </Button>
 

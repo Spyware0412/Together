@@ -3,13 +3,18 @@
 
 import { DotLottiePlayer } from '@dotlottie/react-player';
 
-export const LoadingAnimation = () => {
+interface LoadingAnimationProps {
+  width?: string;
+  height?: string;
+}
+
+export const LoadingAnimation = ({ width = '300px', height = '300px' }: LoadingAnimationProps) => {
   return (
     <DotLottiePlayer
         src="https://assets4.lottiefiles.com/packages/lf20_x62chJ.json"
         autoplay
         loop
-        style={{ width: '300px', height: '300px' }}
+        style={{ width, height }}
     />
   );
 };

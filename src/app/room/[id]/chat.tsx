@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from 'react';
@@ -8,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar, ScrollAreaViewport } from '@/components/ui/scroll-area';
-import { Send, Settings, User, SmilePlus, Search, Loader2, Shield } from 'lucide-react';
+import { Send, Settings, User, SmilePlus, Search, Shield } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { database } from '@/lib/firebase';
 import { ref, push, serverTimestamp } from 'firebase/database';
@@ -16,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useDebounce } from '@/hooks/use-debounce';
 import { ProfileSettings } from '@/components/profile-settings';
 import type { UserProfile } from '@/components/auth-form';
+import { LoadingAnimation } from '@/components/loading-animation';
 
 interface Message {
     id: string;
@@ -202,7 +204,7 @@ export function Chat({ roomId, messages }: ChatProps) {
                                     <div className="grid grid-cols-2 gap-2 p-1">
                                         {isSearchingGifs ? (
                                             <div className="col-span-2 flex justify-center items-center h-full">
-                                                <Loader2 className="w-8 h-8 animate-spin"/>
+                                                <LoadingAnimation width="60px" height="60px"/>
                                             </div>
                                         ) : (
                                             gifs.map(gif => (

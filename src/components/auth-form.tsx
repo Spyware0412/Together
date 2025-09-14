@@ -11,10 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
-import { User, Loader2, Settings } from 'lucide-react';
+import { User, Settings } from 'lucide-react';
 import { database } from '@/lib/firebase';
 import { ref, query, orderByChild, equalTo, get, set, update } from 'firebase/database';
 import { ProfileSettings } from './profile-settings';
+import { LoadingAnimation } from './loading-animation';
 
 const formSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters long."),
@@ -199,7 +200,7 @@ export function AuthForm() {
             )}
         />
         <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? <Loader2 className="animate-spin" /> : "Sign In"}
+            {isLoading ? <LoadingAnimation width="24px" height="24px"/> : "Sign In"}
         </Button>
       </form>
     </Form>
