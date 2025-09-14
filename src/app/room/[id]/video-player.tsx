@@ -558,7 +558,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
 
   if (isLoading) {
     return (
-      <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
+      <div className="w-full h-full bg-background flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Loader2 className="w-16 h-16 text-primary animate-spin" />
         <h2 className="text-2xl font-bold">Loading Room...</h2>
         <p className="text-muted-foreground max-w-sm">Getting things ready for your watch party.</p>
@@ -573,7 +573,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
 
   if (!hasVideoSource && !roomState?.fileName) {
     return (
-      <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
+      <div className="w-full h-full bg-background flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Film className="w-16 h-16 text-muted-foreground" />
         <h2 className="text-2xl font-bold">Select a video to start</h2>
         <p className="text-muted-foreground max-w-sm">
@@ -606,22 +606,22 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
         </div>
       )}
 
-      <div className={cn("absolute inset-0 bg-black/20 transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0", "pointer-events-none")} />
+      <div className={cn("absolute inset-0 bg-background/20 transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0", "pointer-events-none")} />
       
-      <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 z-10", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0", "pointer-events-auto")}>
+      <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-300 z-10", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0", "pointer-events-auto")}>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-white">{formatTime(progress)}</span>
+            <span className="text-xs font-mono text-foreground">{formatTime(progress)}</span>
             <Slider value={[progress]} max={duration} step={1} onValueChange={handleProgressChange} onValueCommit={handleProgressChangeCommit} className="flex-1" disabled={isPlaybackDisabled} />
-            <span className="text-xs font-mono text-white">{formatTime(duration)}</span>
+            <span className="text-xs font-mono text-foreground">{formatTime(duration)}</span>
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}>
+              <Button variant="ghost" size="icon" onClick={togglePlay} className="text-foreground hover:bg-accent" disabled={isPlaybackDisabled}>
                 {roomState?.isPlaying ? <Pause /> : <Play />}
               </Button>
               <div className="flex items-center gap-2 w-32">
-                <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white hover:bg-white/20 hover:text-white" >
+                <Button variant="ghost" size="icon" onClick={toggleMute} className="text-foreground hover:bg-accent" >
                   {isMuted || volume === 0 ? <VolumeX /> : <Volume2 />}
                 </Button>
                 <Slider value={[isMuted ? 0 : volume]} max={1} step={0.05} onValueChange={handleVolumeChange} />
@@ -631,7 +631,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
             <div className="flex items-center gap-1">
                 <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Info /></Button>
+                        <Button variant="ghost" size="icon" className="text-foreground hover:bg-accent" disabled={isPlaybackDisabled}><Info /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-96" align="end">
                         <div className="grid gap-3 p-2">
@@ -648,7 +648,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                 </DropdownMenu>
                 <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 hover:text-white" disabled={isPlaybackDisabled}><Settings /></Button>
+                        <Button variant="ghost" size="icon" className="text-foreground hover:bg-accent" disabled={isPlaybackDisabled}><Settings /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-96" align="end">
                         <div className="grid gap-4 p-2">
@@ -771,7 +771,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                     </DropdownMenuContent>
                 </DropdownMenu>
 
-              <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/20 hover:text-white"><Maximize /></Button>
+              <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-foreground hover:bg-accent"><Maximize /></Button>
             </div>
           </div>
         </div>
@@ -816,4 +816,4 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   );
 }
 
-    
+  
