@@ -620,10 +620,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                   </Button>
                   <Slider value={[isMuted ? 0 : volume]} max={1} step={0.05} onValueChange={handleVolumeChange} />
                 </div>
-              </div>
-
-              <div className="flex items-center gap-1">
-                  <DropdownMenu modal={false}>
+                 <DropdownMenu modal={false}>
                       <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="text-foreground hover:bg-accent" disabled={isPlaybackDisabled}><Info /></Button>
                       </DropdownMenuTrigger>
@@ -764,7 +761,9 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                           </div>
                       </DropdownMenuContent>
                   </DropdownMenu>
+              </div>
 
+              <div className="flex items-center gap-1">
                 <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-foreground hover:bg-accent"><Maximize /></Button>
               </div>
             </div>
