@@ -189,6 +189,14 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const messagesRef = ref(database, `rooms/${roomId}/chat`);
 
   useEffect(() => {
+    if (playerRef.current && (isInfoOpen || isSettingsOpen)) {
+      playerRef.current.setAttribute('inert', '');
+    } else if (playerRef.current) {
+      playerRef.current.removeAttribute('inert');
+    }
+  }, [isInfoOpen, isSettingsOpen]);
+  
+  useEffect(() => {
     if (chatViewportRef.current) {
         chatViewportRef.current.scrollTo({ top: chatViewportRef.current.scrollHeight, behavior: 'smooth' });
     }
