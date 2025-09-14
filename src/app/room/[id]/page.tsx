@@ -308,7 +308,7 @@ export default function RoomPage() {
                   Change Video
               </Button>
             
-              <div className="md:hidden">
+              <div className="lg:hidden">
                 <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                   <SheetTrigger asChild>
                     <Button variant="outline" size="icon">
@@ -338,7 +338,7 @@ export default function RoomPage() {
           />
         </div>
       </main>
-      <aside className="w-[350px] border-l border-border flex-col hidden md:flex">
+      <aside className="w-[350px] border-l border-border flex-col hidden lg:flex">
          <ChatComponents />
       </aside>
     </div>
