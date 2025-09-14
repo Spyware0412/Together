@@ -315,9 +315,6 @@ export default function RoomPage() {
                     </Button>
                   </SheetTrigger>
                   <SheetContent side="right" className="w-full max-w-sm p-0 flex flex-col bg-background/80 backdrop-blur-sm">
-                     <SheetHeader className="p-4 border-b">
-                        <SheetTitle>Chat & Tools</SheetTitle>
-                     </SheetHeader>
                      <ChatComponents />
                   </SheetContent>
                 </Sheet>

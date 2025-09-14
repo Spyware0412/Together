@@ -128,7 +128,7 @@ export function Chat({ roomId, messages, activeUsers, user, setUser, theme, togg
 
     return (
         <div className="h-full flex flex-col">
-            <CardHeader className="flex-row items-center justify-between gap-2 flex-wrap">
+            <CardHeader className="flex-row items-center justify-between gap-2 flex-wrap pt-4">
                  <CardTitle>Live Chat</CardTitle>
                  <div className="flex items-center gap-1 flex-wrap">
                     <DropdownMenu>
