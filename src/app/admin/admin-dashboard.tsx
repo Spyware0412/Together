@@ -45,40 +45,31 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const { toast } = useToast();
 
     useEffect(() => {
+        const usersRef = ref(database, 'users');
         const roomsRef = ref(database, 'rooms');
 
-        const onData = onValue(roomsRef, (snapshot) => {
-            const allRoomsData = snapshot.val();
-            if (allRoomsData) {
-                const roomList = Object.keys(allRoomsData).map(key => ({ id: key, ...allRoomsData[key] }));
-                setRooms(roomList);
-
-                const allUsersMap = new Map<string, User>();
-                
-                roomList.forEach(room => {
-                    if (room.users) {
-                        Object.values(room.users).forEach((user: any) => {
-                            if (user && user.id && !allUsersMap.has(user.id)) {
-                                allUsersMap.set(user.id, {
-                                    id: user.id,
-                                    name: user.name || 'Unknown',
-                                    email: user.email || 'No email',
-                                    avatar: user.avatar || '',
-                                });
-                            }
-                        });
-                    }
-                });
-                
-                setUsers(Array.from(allUsersMap.values()));
+        const onUsersValue = onValue(usersRef, (snapshot) => {
+            const usersData = snapshot.val();
+            if (usersData) {
+                const userList = Object.keys(usersData).map(key => ({ ...usersData[key], id: key }));
+                setUsers(userList);
             } else {
-                setRooms([]);
                 setUsers([]);
             }
         });
 
+        const onRoomsValue = onValue(roomsRef, (snapshot) => {
+            const roomsData = snapshot.val();
+            if (roomsData) {
+                const roomList = Object.keys(roomsData).map(key => ({ id: key, ...roomsData[key] }));
+                setRooms(roomList);
+            } else {
+                setRooms([]);
+            }
+        });
+
         return () => {
-            // Detach listener
+            // Detach listeners
         };
     }, []);
 
@@ -101,6 +92,10 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
     const handleDeleteUser = async (userId: string) => {
         try {
+            // Remove the user from the global users list
+            await remove(ref(database, `users/${userId}`));
+            
+            // Also remove the user from all rooms they might be in
             const roomsSnapshot = await get(ref(database, 'rooms'));
             const allRoomsData = roomsSnapshot.val();
 
@@ -114,7 +109,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
             }
             toast({
                 title: "User Deleted",
-                description: `User ${userId} has been removed from all rooms.`,
+                description: `User has been permanently deleted.`,
             });
         } catch (error) {
             console.error("Error deleting user:", error);
@@ -146,7 +141,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         <CardHeader>
                             <CardTitle>All Users</CardTitle>
                             <CardDescription>
-                                A list of all unique users who have joined any room.
+                                A list of all registered users in the application.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -156,6 +151,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                         <TableHead className="w-[80px]">Avatar</TableHead>
                                         <TableHead>Name</TableHead>
                                         <TableHead>Email</TableHead>
+                                        <TableHead>User ID</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -170,6 +166,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                             </TableCell>
                                             <TableCell className="font-medium">{user.name}</TableCell>
                                             <TableCell>{user.email}</TableCell>
+                                            <TableCell className="font-mono text-xs">{user.id}</TableCell>
                                             <TableCell className="text-right">
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
@@ -179,7 +176,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                                         <AlertDialogHeader>
                                                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                             <AlertDialogDescription>
-                                                                This will permanently delete the user from all rooms. This action cannot be undone.
+                                                                This will permanently delete the user and all their associated data. This action cannot be undone.
                                                             </AlertDialogDescription>
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
@@ -194,7 +191,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                         </TableRow>
                                     )) : (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center">No users found.</TableCell>
+                                            <TableCell colSpan={5} className="text-center">No users found.</TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
