@@ -59,6 +59,8 @@ export async function GET(req: Request) {
     );
 
     if (!tmdbRes.ok) {
+      const errorText = await tmdbRes.text();
+      console.error("TMDB error:", errorText);
       return NextResponse.json({ error: "Failed to fetch movie details from TMDB" }, { status: tmdbRes.status });
     }
 
@@ -91,3 +93,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message || "An internal error occurred." }, { status: 500 });
   }
 }
+
