@@ -1,15 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { AnimatePresence, motion } from "framer-motion"
 import { themes } from "@/lib/themes"
 
 type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: string
   storageKey?: string
-  attribute?: "class" | "data-theme"
-  enableSystem?: boolean
 }
 
 type ThemeProviderState = {
@@ -28,7 +25,6 @@ export function ThemeProvider({
   children,
   defaultTheme = "theme-default",
   storageKey = "cinesync-theme",
-  attribute = "class",
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = React.useState(
@@ -38,11 +34,13 @@ export function ThemeProvider({
   React.useEffect(() => {
     const root = window.document.documentElement
     
-    // Remove all possible theme classes
-    themes.forEach(t => root.classList.remove(t.name));
+    // Remove all possible theme classes before adding the new one.
+    root.classList.remove(...themes.map(t => t.name));
 
-    // Add the currently selected theme class
-    root.classList.add(theme)
+    if (theme) {
+      root.classList.add(theme);
+    }
+
   }, [theme])
 
   const value = {
@@ -55,17 +53,7 @@ export function ThemeProvider({
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
-        <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-                key={theme}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
-            >
-                {children}
-            </motion.div>
-        </AnimatePresence>
+        {children}
     </ThemeProviderContext.Provider>
   )
 }

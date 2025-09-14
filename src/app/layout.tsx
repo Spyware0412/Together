@@ -22,9 +22,8 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <ThemeProvider
-          attribute="class"
-          defaultTheme="default"
-          enableSystem={false}
+          storageKey="cinesync-theme"
+          defaultTheme="theme-default"
         >
           {children}
           <Toaster />

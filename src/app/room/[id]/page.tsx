@@ -185,7 +185,7 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="flex h-screen max-h-screen bg-background/80 text-foreground overflow-hidden relative backdrop-blur-sm">
+    <div className="flex h-screen max-h-screen bg-background text-foreground overflow-hidden relative">
       <main className="flex-1 flex flex-col p-2 md:p-4 gap-4">
         <header className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -291,7 +291,7 @@ export default function RoomPage() {
                       <MessageSquare className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-[350px] p-0 flex flex-col bg-card/80 backdrop-blur-sm">
+                  <SheetContent side="right" className="w-[350px] p-0 flex flex-col bg-card/80">
                      <SheetHeader className="p-4 border-b">
                         <SheetTitle>Chat & Tools</SheetTitle>
                      </SheetHeader>
@@ -317,7 +317,7 @@ export default function RoomPage() {
           />
         </div>
       </main>
-      <aside className="w-[350px] bg-card/80 border-l border-border flex-col hidden md:flex backdrop-blur-sm">
+      <aside className="w-[350px] bg-card/80 border-l border-border flex-col hidden md:flex">
         <div className="flex-1 min-h-0">
           <Chat roomId={roomId} onNewMessage={handleNewMessage} />
         </div>
