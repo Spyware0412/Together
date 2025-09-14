@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -192,6 +193,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
       
+      // If a public URL is available, use it.
       if (data?.videoUrl) {
           if (localVideoUrlRef.current) {
               URL.revokeObjectURL(localVideoUrlRef.current);
@@ -201,12 +203,17 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
               setVideoSrc(data.videoUrl);
           }
           setLocalFileName(data.fileName ?? "Video from URL");
-      } else if (data?.fileName) {
+      }
+      // If only a fileName is available, it's a local file.
+      else if (data?.fileName) {
+          // If we had a URL source before, clear it.
           if (videoSrc && !localVideoUrlRef.current) {
               setVideoSrc(null);
           }
           setLocalFileName(data.fileName);
-      } else {
+      }
+      // If no video info is present, reset everything.
+      else {
           if (localVideoUrlRef.current) {
               URL.revokeObjectURL(localVideoUrlRef.current);
               localVideoUrlRef.current = null;
@@ -245,7 +252,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       }
       if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
     };
-  }, [roomId]);
+  }, [roomId, videoSrc]);
 
   const syncState = useCallback((state: Partial<RoomState>) => {
       if (isRemoteUpdate.current) return;
@@ -585,14 +592,14 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       
       {isPlaybackDisabled && (
         <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
-          <Alert variant="destructive" className="max-w-md">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>File Mismatch</AlertTitle>
+          <Alert className="max-w-md">
+            <Info className="h-4 w-4" />
+            <AlertTitle>Your friends are watching!</AlertTitle>
             <AlertDescription>
-              The group is watching <span className="font-bold">{roomState?.fileName}</span>. Please select the correct file to sync.
+              They are watching <span className="font-bold">{roomState?.fileName}</span>. Select your file to sync and join in.
             </AlertDescription>
             <div className="mt-4">
-              <Button asChild variant="secondary"><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Correct Video File</label></Button>
+              <Button asChild variant="secondary"><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Video File</label></Button>
               <input id="video-upload-mismatch" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
             </div>
           </Alert>
