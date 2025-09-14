@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Clapperboard, MessageSquare, Link as LinkIcon, Play, Video, Users, Sun, Moon, LogOut } from 'lucide-react';
+import { Clapperboard, MessageSquare, Play, Video } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -16,11 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingAnimation } from '@/components/loading-animation';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ProfileSettings } from '@/components/profile-settings';
-import Link from 'next/link';
-import { Settings, Shield } from 'lucide-react';
+import type { UserProfile } from '@/components/auth-form';
 
 interface Message {
     id: string;
@@ -33,14 +29,6 @@ interface Message {
     gif?: string;
     type: 'text' | 'gif';
     timestamp: number;
-}
-
-interface UserProfile {
-    id: string;
-    name: string;
-    email: string;
-    avatar: string;
-    online?: boolean;
 }
 
 export default function RoomPage() {
@@ -252,6 +240,11 @@ export default function RoomPage() {
             roomId={roomId} 
             messages={messages}
             activeUsers={activeUsers}
+            user={user}
+            setUser={setUser}
+            theme={theme}
+            toggleTheme={toggleTheme}
+            handleLeaveRoom={handleLeaveRoom}
         />
       </div>
       <div className="border-t border-border">
@@ -263,18 +256,20 @@ export default function RoomPage() {
   return (
     <div className="flex h-screen max-h-screen bg-background text-foreground overflow-hidden">
       <main className="flex-1 flex flex-col p-2 lg:p-4 gap-4">
-        <header className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                <Clapperboard className="w-6 h-6 text-primary" />
-                <h1 className="text-xl font-semibold">
-                  Room: <span className="font-mono text-primary bg-accent px-2 py-1 rounded-md">{roomId}</span>
-                </h1>
+        <header className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+                <Clapperboard className="w-6 h-6 text-primary flex-shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <h1 className="text-lg font-semibold truncate">
+                    Room
+                  </h1>
+                  <span className="font-mono text-sm text-primary bg-accent px-2 py-1 rounded-md truncate">{roomId}</span>
+                </div>
             </div>
             <div className="flex items-center gap-2">
                <Dialog open={isUrlDialogOpen} onOpenChange={setIsUrlDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <LinkIcon className="w-4 h-4 mr-2" />
                     Load URL
                   </Button>
                 </DialogTrigger>
@@ -309,64 +304,8 @@ export default function RoomPage() {
               </Dialog>
 
                <Button variant="outline" size="sm" onClick={handleChangeVideoClick}>
-                  <Video className="w-4 h-4 mr-2" />
                   Change Video
               </Button>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                        <Users className="w-4 h-4 mr-2"/>
-                        <span>{activeUsers.length}</span>
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56">
-                <DropdownMenuLabel>Watching Now</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {activeUsers.length > 0 ? (
-                    activeUsers.map(u => (
-                    <DropdownMenuItem key={u.id} className="gap-2">
-                        <Avatar className="w-6 h-6">
-                            <AvatarImage src={u.avatar} alt={u.name} />
-                            <AvatarFallback>{u.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span>{u.name}</span>
-                    </DropdownMenuItem>
-                    ))
-                ) : (
-                    <DropdownMenuItem disabled>You are the only one here</DropdownMenuItem>
-                )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-                <Button variant="outline" size="icon" onClick={toggleTheme}>
-                    <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                    <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                    <span className="sr-only">Toggle theme</span>
-                </Button>
-                
-                {user && (
-                  <ProfileSettings 
-                      user={user} 
-                      setUser={setUser}
-                      trigger={
-                          <Button variant="outline" size="icon">
-                              <Settings className="w-4 h-4" />
-                          </Button>
-                      }
-                  >
-                      <Button variant="secondary" asChild className="w-full">
-                          <Link href="/admin">
-                              <Shield className="mr-2 h-4 w-4" /> Admin Panel
-                          </Link>
-                      </Button>
-                  </ProfileSettings>
-                )}
-
-                <Button variant="destructive" size="sm" onClick={handleLeaveRoom}>
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Leave
-                </Button>
             
               <div className="lg:hidden">
                 <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
