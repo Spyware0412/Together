@@ -6,18 +6,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Sun, Moon } from 'lucide-react';
+import { Clapperboard, MessageSquare, Link as LinkIcon, Play, Video } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off, update, serverTimestamp, set } from 'firebase/database';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Video } from 'lucide-react';
 import { LoadingAnimation } from '@/components/loading-animation';
 
 interface Message {
@@ -239,7 +236,14 @@ export default function RoomPage() {
   const ChatComponents = () => (
     <>
       <div className="flex-1 min-h-0">
-        <Chat roomId={roomId} messages={messages} />
+        <Chat 
+            roomId={roomId} 
+            messages={messages}
+            activeUsers={activeUsers}
+            theme={theme}
+            toggleTheme={toggleTheme}
+            handleLeaveRoom={handleLeaveRoom}
+        />
       </div>
       <div className="border-t border-border">
         <ContentSuggester />
@@ -295,44 +299,11 @@ export default function RoomPage() {
                 </DialogContent>
               </Dialog>
 
-               <Button variant="outline" size="icon" onClick={toggleTheme} title="Toggle Theme">
-                  <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                  <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                  <span className="sr-only">Toggle theme</span>
-                </Button>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <div className="flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-                        <Users className="w-5 h-5"/>
-                        <span>{activeUsers.length} watching</span>
-                    </div>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-64" align="end">
-                  <DropdownMenuLabel>Users in Room ({activeUsers.length})</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {activeUsers.length > 0 ? (
-                    activeUsers.map(user => (
-                      <DropdownMenuItem key={user.id} className="gap-2">
-                         <Avatar className="w-6 h-6">
-                            <AvatarImage src={user.avatar} alt={user.name} />
-                            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span className="truncate">{user.name}</span>
-                      </DropdownMenuItem>
-                    ))
-                  ) : (
-                     <DropdownMenuItem disabled>No other users online</DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-               <Button variant="ghost" size="icon" onClick={handleChangeVideoClick} title="Change Video">
-                  <Video className="w-5 h-5 text-muted-foreground" />
+               <Button variant="outline" size="sm" onClick={handleChangeVideoClick} title="Change Video">
+                  <Video className="w-4 h-4 mr-2" />
+                  <span>Change Video</span>
               </Button>
-              <Button variant="ghost" size="icon" onClick={handleLeaveRoom} title="Leave Room">
-                  <LogOut className="w-5 h-5 text-muted-foreground" />
-              </Button>
+            
               <div className="md:hidden">
                 <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                   <SheetTrigger asChild>
@@ -340,7 +311,7 @@ export default function RoomPage() {
                       <MessageSquare className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-[350px] p-0 flex flex-col">
+                  <SheetContent side="right" className="w-full max-w-sm p-0 flex flex-col">
                      <SheetHeader className="p-4 border-b">
                         <SheetTitle>Chat & Tools</SheetTitle>
                      </SheetHeader>
