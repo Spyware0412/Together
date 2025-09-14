@@ -189,10 +189,12 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const messagesRef = ref(database, `rooms/${roomId}/chat`);
 
   useEffect(() => {
-    if (playerRef.current && (isInfoOpen || isSettingsOpen)) {
-      playerRef.current.setAttribute('inert', '');
-    } else if (playerRef.current) {
-      playerRef.current.removeAttribute('inert');
+    if (playerRef.current) {
+        if (isInfoOpen || isSettingsOpen) {
+            playerRef.current.setAttribute('inert', '');
+        } else {
+            playerRef.current.removeAttribute('inert');
+        }
     }
   }, [isInfoOpen, isSettingsOpen]);
   
