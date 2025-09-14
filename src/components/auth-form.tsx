@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
 import { User, Loader2 } from 'lucide-react';
 import { database } from '@/lib/firebase';
-import { ref, query, orderByChild, equalTo, get, set } from 'firebase/database';
+import { ref, query, orderByChild, equalTo, get, set, update } from 'firebase/database';
 
 const formSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters long."),
@@ -45,7 +45,6 @@ export function AuthForm() {
         if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
             setUser(parsedUser);
-            // Pre-fill form for logged-in user to easily re-login
             form.reset({ username: parsedUser.name, email: parsedUser.email });
         }
     }, [form]);
@@ -60,21 +59,25 @@ export function AuthForm() {
             let userProfile: UserProfile;
 
             if (snapshot.exists()) {
-                // User with this email already exists, log them in.
+                // User with this email already exists.
                 const usersData = snapshot.val();
                 const userId = Object.keys(usersData)[0];
-                userProfile = usersData[userId];
+                userProfile = { ...usersData[userId], id: userId };
                 
                 // If username has changed, update it.
                 if (userProfile.name !== data.username) {
+                    await update(ref(database, `users/${userId}`), { name: data.username });
                     userProfile.name = data.username;
-                    await set(ref(database, `users/${userId}`), userProfile);
+                    toast({
+                        title: "Username Updated!",
+                        description: `Logged in as ${userProfile.name}.`,
+                    });
+                } else {
+                     toast({
+                        title: "Welcome Back!",
+                        description: `Logged in as ${userProfile.name}.`,
+                    });
                 }
-                
-                toast({
-                    title: "Welcome Back!",
-                    description: `Logged in as ${userProfile.name}.`,
-                });
             } else {
                 // New user, create a profile.
                 const userId = `user_${uuidv4()}`;
