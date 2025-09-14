@@ -1,20 +1,21 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Particles, { initParticlesEngine } from "@tsparticles/react";
-import { type Container, type ISourceOptions } from "@tsparticles/engine";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import Particles from "react-tsparticles";
+import { type Container, type ISourceOptions, type Engine } from "@tsparticles/engine";
 import { loadSlim } from "@tsparticles/slim"; 
 
 const ParticlesBackground = () => {
   const [init, setInit] = useState(false);
 
   useEffect(() => {
-    initParticlesEngine(async (engine) => {
-      await loadSlim(engine);
-    }).then(() => {
-      setInit(true);
-    });
+    // this is needed to ensure the component is mounted on the client side
+    setInit(true);
+  }, []);
+
+  const particlesInit = useCallback(async (engine: Engine) => {
+    await loadSlim(engine);
   }, []);
 
   const particlesLoaded = async (container?: Container): Promise<void> => {
@@ -96,7 +97,8 @@ const ParticlesBackground = () => {
     return (
       <Particles
         id="tsparticles"
-        particlesLoaded={particlesLoaded}
+        init={particlesInit}
+        loaded={particlesLoaded}
         options={options}
         className="absolute inset-0 -z-10"
       />
