@@ -29,6 +29,15 @@ interface UserProfile {
     avatar: string;
 }
 
+const manoshiMessages = [
+    "Welcome, My Love! This world is brighter with you in it.",
+    "Hey, Beautiful! Seeing you here makes my day.",
+    "Welcome Back, Sweetheart! The app was missing its star.",
+    "Hello, my favorite person! Ready for a movie night?",
+    "So happy to see you, my love! You make everything better.",
+    "Welcome, My Queen! Your presence graces this little app.",
+];
+
 export function AuthForm() {
     const router = useRouter();
     const { toast } = useToast();
@@ -76,9 +85,10 @@ export function AuthForm() {
                 userProfile = existingUser;
 
                 if (userProfile.name.toLowerCase() === 'manoshi') {
+                     const randomMessage = manoshiMessages[Math.floor(Math.random() * manoshiMessages.length)];
                      toast({
-                        title: "Welcome, My Love! 💖",
-                        description: `So happy to see you here, ${userProfile.name}.`,
+                        title: "Hey, Beautiful! 💖",
+                        description: randomMessage,
                     });
                 } else {
                     toast({
@@ -98,9 +108,10 @@ export function AuthForm() {
                 await set(ref(database, `users/${userId}`), userProfile);
                 
                 if (userProfile.name.toLowerCase() === 'manoshi') {
+                     const randomMessage = manoshiMessages[Math.floor(Math.random() * manoshiMessages.length)];
                      toast({
-                        title: "Hey, Beautiful! Welcome! 💖",
-                        description: "This app was made for you. I hope you love it.",
+                        title: "Welcome, My Love! 💖",
+                        description: randomMessage,
                     });
                 } else {
                     toast({
