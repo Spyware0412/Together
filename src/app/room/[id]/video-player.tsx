@@ -614,10 +614,10 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                 <Button variant="ghost" size="icon" onClick={togglePlay} className="text-foreground hover:bg-accent" disabled={isPlaybackDisabled}>
                   {roomState?.isPlaying ? <Pause /> : <Play />}
                 </Button>
-                <div className="flex items-center gap-2 w-32">
-                  <Button variant="ghost" size="icon" onClick={toggleMute} className="text-foreground hover:bg-accent" >
+                <Button variant="ghost" size="icon" onClick={toggleMute} className="text-foreground hover:bg-accent" >
                     {isMuted || volume === 0 ? <VolumeX /> : <Volume2 />}
-                  </Button>
+                </Button>
+                <div className="w-24">
                   <Slider value={[isMuted ? 0 : volume]} max={1} step={0.05} onValueChange={handleVolumeChange} />
                 </div>
                  <DropdownMenu modal={false}>
