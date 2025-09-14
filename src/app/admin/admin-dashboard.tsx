@@ -8,6 +8,9 @@ import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { database } from "@/lib/firebase";
 import { ref, onValue } from "firebase/database";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 interface User {
     id: string;
@@ -30,7 +33,6 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const [rooms, setRooms] = useState<Room[]>([]);
 
     useEffect(() => {
-        // In a real app, you might want more robust data fetching and pagination
         const usersRef = ref(database, 'users');
         const roomsRef = ref(database, 'rooms');
 
@@ -63,8 +65,8 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
             
             <Tabs defaultValue="users" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="users">Users</TabsTrigger>
-                    <TabsTrigger value="rooms">Rooms</TabsTrigger>
+                    <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
+                    <TabsTrigger value="rooms">Rooms ({rooms.length})</TabsTrigger>
                 </TabsList>
                 <TabsContent value="users">
                     <Card>
@@ -75,8 +77,37 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <p>User management feature coming soon.</p>
-                            {/* Placeholder for user list */}
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[80px]">Avatar</TableHead>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {users.length > 0 ? users.map(user => (
+                                        <TableRow key={user.id}>
+                                            <TableCell>
+                                                <Avatar>
+                                                    <AvatarImage src={user.avatar} />
+                                                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                            </TableCell>
+                                            <TableCell className="font-medium">{user.name}</TableCell>
+                                            <TableCell>{user.email}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="destructive" size="sm" disabled>Delete</Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    )) : (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center">No users found.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -89,8 +120,28 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                             <p>Room management feature coming soon.</p>
-                             {/* Placeholder for room list */}
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Room ID</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                     {rooms.length > 0 ? rooms.map(room => (
+                                        <TableRow key={room.id}>
+                                            <TableCell className="font-mono">{room.id}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="destructive" size="sm" disabled>Delete</Button>
+                                            </TableCell>
+                                        </TableRow>
+                                     )) : (
+                                        <TableRow>
+                                            <TableCell colSpan={2} className="text-center">No rooms found.</TableCell>
+                                        </TableRow>
+                                     )}
+                                </TableBody>
+                            </Table>
                         </CardContent>
                     </Card>
                 </TabsContent>
