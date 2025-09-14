@@ -270,7 +270,7 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
                                         ) : (
                                             gifs.map(gif => (
                                                 <button key={gif.id} onClick={() => handleSendGif(gif.url)} className="relative aspect-square focus:outline-none focus:ring-2 focus:ring-ring rounded overflow-hidden">
-                                                    <Image src={gif.preview} alt="gif" layout="fill" objectFit="cover" unoptimized/>
+                                                    <Image src={gif.preview} alt="gif" fill objectFit="cover" unoptimized/>
                                                 </button>
                                             ))
                                         )}

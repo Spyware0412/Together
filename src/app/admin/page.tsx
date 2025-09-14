@@ -30,7 +30,7 @@ export default function AdminPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-8 bg-gradient-to-br from-background to-slate-900">
+    <main className="flex min-h-screen flex-col items-center p-8 bg-background/80 backdrop-blur-sm">
         <div className="w-full max-w-6xl">
             <header className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-3">
