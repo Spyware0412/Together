@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -17,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { themes, Theme } from '@/lib/themes';
-import { ThemeProvider, useTheme } from '@/context/theme-provider';
+import { cn } from '@/lib/utils';
 
 interface Message {
     id: string;
@@ -40,7 +41,7 @@ interface UserProfile {
     online?: boolean;
 }
 
-function RoomPageContent() {
+export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
   const roomId = params.id as string;
@@ -51,7 +52,7 @@ function RoomPageContent() {
   const [isUrlDialogOpen, setIsUrlDialogOpen] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
   const [isResolvingUrl, setIsResolvingUrl] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const [theme, setTheme] = useState('theme-default');
   
   const { toast } = useToast();
   const userStatusRef = useRef<any>(null);
@@ -62,6 +63,16 @@ function RoomPageContent() {
   useEffect(() => {
     activeUsersRef.current = activeUsers;
   }, [activeUsers]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('cinesync-theme-global') || 'theme-default';
+    setTheme(savedTheme);
+  }, []);
+
+  const handleSetTheme = (newTheme: string) => {
+    setTheme(newTheme);
+    localStorage.setItem('cinesync-theme-global', newTheme);
+  };
 
   useEffect(() => {
     if (!roomId) return;
@@ -253,7 +264,7 @@ function RoomPageContent() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Select a Theme</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+                  <DropdownMenuRadioGroup value={theme} onValueChange={handleSetTheme}>
                     {themes.map((themeOption) => (
                       <DropdownMenuRadioItem key={themeOption.name} value={themeOption.name}>
                         {themeOption.label}
@@ -302,16 +313,11 @@ function RoomPageContent() {
                       <MessageSquare className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-[350px] p-0 flex flex-col">
+                  <SheetContent side="right" className={cn("w-[350px] p-0 flex flex-col", theme)}>
                      <SheetHeader className="p-4 border-b">
                         <SheetTitle>Chat & Tools</SheetTitle>
                      </SheetHeader>
-                     <ThemeProvider
-                        storageKey="cinesync-theme"
-                        defaultTheme="theme-default"
-                      >
-                        <ChatComponents />
-                      </ThemeProvider>
+                     <ChatComponents />
                   </SheetContent>
                 </Sheet>
               </div>
@@ -328,23 +334,11 @@ function RoomPageContent() {
           />
         </div>
       </main>
-      <aside className="w-[350px] border-l border-border flex-col hidden md:flex">
-         <ThemeProvider
-            storageKey="cinesync-theme"
-            defaultTheme="theme-default"
-          >
-           <ChatComponents />
-        </ThemeProvider>
+      <aside className={cn("w-[350px] border-l border-border flex-col hidden md:flex", theme)}>
+         <ChatComponents />
       </aside>
     </div>
   );
 }
 
-
-export default function RoomPage() {
-  return (
-    <ThemeProvider storageKey="cinesync-theme-global">
-      <RoomPageContent />
-    </ThemeProvider>
-  );
-}
+    
