@@ -254,10 +254,10 @@ export default function RoomPage() {
   return (
     <div className="flex h-screen max-h-screen bg-background text-foreground overflow-hidden relative">
       <main className="flex-1 flex flex-col p-2 md:p-4 gap-4">
-        <header className="flex items-center justify-between">
+        <header className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-                <Clapperboard className="w-6 h-6 text-primary" />
-                <h1 className="text-lg md:text-xl font-semibold">
+                <Clapperboard className="w-6 h-6 text-primary flex-shrink-0" />
+                <h1 className="text-base md:text-xl font-semibold break-all">
                   Room: <span className="font-mono text-primary bg-accent px-2 py-1 rounded-md">{roomId}</span>
                 </h1>
             </div>
@@ -265,8 +265,8 @@ export default function RoomPage() {
                <Dialog open={isUrlDialogOpen} onOpenChange={setIsUrlDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <LinkIcon className="w-4 h-4 mr-2" />
-                    Load URL
+                    <LinkIcon className="w-4 h-4 md:mr-2" />
+                    <span className="hidden md:inline">Load URL</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
@@ -300,8 +300,8 @@ export default function RoomPage() {
               </Dialog>
 
                <Button variant="outline" size="sm" onClick={handleChangeVideoClick} title="Change Video">
-                  <Video className="w-4 h-4 mr-2" />
-                  <span>Change Video</span>
+                  <Video className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">Change Video</span>
               </Button>
             
               <div className="md:hidden">
@@ -338,5 +338,3 @@ export default function RoomPage() {
     </div>
   );
 }
-
-    

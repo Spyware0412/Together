@@ -144,7 +144,7 @@ export function Chat({ roomId, messages, activeUsers, theme, toggleTheme, handle
                                 <span className="sr-only">Users in Room</span>
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-64" align="end">
+                        <DropdownMenuContent className="w-64 max-w-[80vw]" align="end">
                         <DropdownMenuLabel>Watching Now ({activeUsers.length})</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {activeUsers.length > 0 ? (
@@ -232,7 +232,7 @@ export function Chat({ roomId, messages, activeUsers, theme, toggleTheme, handle
                                 <SmilePlus className="w-5 h-5"/>
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-80" align="start">
+                        <PopoverContent className="w-[90vw] max-w-sm" align="start">
                             <div className="space-y-2">
                                 <div className="relative">
                                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
