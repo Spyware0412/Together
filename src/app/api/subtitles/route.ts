@@ -1,218 +1,56 @@
 
-import { NextRequest, NextResponse } from 'next/server';
-import { gunzipSync } from 'zlib';
+import { NextResponse } from "next/server";
 
-interface SubtitleFile {
-  file_id: number;
-  file_name: string;
-}
+const TMDB_API_KEY = process.env.TMDB_API_KEY!;
+const OPENSUBTITLES_API_KEY = process.env.OPENSUBTITLES_API_KEY!;
 
-interface Subtitle {
-  id: string;
-  type: string;
-  attributes: {
-    language: string;
-    files: SubtitleFile[];
-    download_count: number;
-    feature_details: {
-        movie_name: string;
-    }
-  };
-}
-
-interface FormattedSubtitle {
-  language: string;
-  url: string;
-  fileName: string;
-}
-
-const cache = new Map<string, { data: FormattedSubtitle[]; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-// Helper to convert SRT to VTT format
-const srtToVtt = (srtText: string): string => {
-  let vtt = "WEBVTT\n\n";
-  const srtLines = srtText.trim().replace(/\r/g, '').split('\n');
-
-  for (let i = 0; i < srtLines.length; i++) {
-    const line = srtLines[i];
-    if (line.includes('-->')) {
-      // Look for a sequence number on the previous line
-      const potentialIndex = srtLines[i - 1];
-      if (potentialIndex && /^\d+$/.test(potentialIndex)) {
-        vtt += `${i === 1 ? '' : '\n'}${potentialIndex}\n`;
-      }
-      
-      const timeLine = line.replace(/,/g, '.');
-      vtt += `${timeLine}\n`;
-
-      let textLines = [];
-      let j = i + 1;
-      while (j < srtLines.length && srtLines[j].trim() !== '') {
-        textLines.push(srtLines[j]);
-        j++;
-      }
-      vtt += textLines.join('\n') + '\n\n';
-      i = j;
-    }
-  }
-  return vtt;
-};
-
-// Normalize language codes
-const normalizeLang = (lang: string) => {
-  if (!lang) return "unknown";
-  const lowerLang = lang.toLowerCase();
-  const mapping: { [key: string]: string } = {
-    "en": "eng",
-    "english": "eng",
-    "en-us": "eng",
-  };
-  return mapping[lowerLang] || lowerLang.substring(0, 3);
-};
-
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const tmdbId = searchParams.get('tmdb_id');
-  const openSubtitlesApiKey = process.env.OPENSUBTITLES_API_KEY;
-  const tmdbApiKey = process.env.TMDB_API_KEY;
-
-  if (!tmdbId) {
-    return NextResponse.json({ error: 'TMDb ID parameter is required' }, { status: 400 });
-  }
-
-  if (!openSubtitlesApiKey || !tmdbApiKey) {
-    console.error('API keys for OpenSubtitles or TMDb are not configured.');
-    return NextResponse.json({ error: 'Server API keys are not configured' }, { status: 500 });
-  }
-
-  const cacheKey = `subtitles_tmdb_${tmdbId}`;
-  const cached = cache.get(cacheKey);
-
-  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-    return NextResponse.json(cached.data);
-  }
-
+export async function GET(req: Request) {
   try {
-    // Step 1: Get IMDb ID from TMDb using the tmdb_id
-    const tmdbDetailsRes = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${tmdbApiKey}`);
+    const { searchParams } = new URL(req.url);
+    const tmdbId = searchParams.get("tmdb_id");
 
-    if (!tmdbDetailsRes.ok) {
-        console.error(`TMDb details fetch failed for ID ${tmdbId}:`, tmdbDetailsRes.status, await tmdbDetailsRes.text());
-        return NextResponse.json({ error: 'Failed to fetch movie details from TMDb' }, { status: tmdbDetailsRes.status });
+    if (!tmdbId) {
+      return NextResponse.json({ error: "Missing tmdb_id" }, { status: 400 });
     }
-    const tmdbDetails = await tmdbDetailsRes.json();
-    const imdbId = tmdbDetails.imdb_id;
+
+    // 1. Get IMDB ID from TMDB
+    const tmdbRes = await fetch(
+      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`
+    );
+
+    if (!tmdbRes.ok) {
+      throw new Error("Failed to fetch movie details from TMDB");
+    }
+
+    const tmdbData = await tmdbRes.json();
+    let imdbId: string = tmdbData.imdb_id;
 
     if (!imdbId) {
-        console.error(`IMDb ID not found for TMDb ID ${tmdbId}`);
-        return NextResponse.json({ error: 'IMDb ID not found for this movie on TMDb' }, { status: 404 });
-    }
-    
-    // OpenSubtitles expects the numeric part of the IMDb ID
-    const imdbIdNumeric = imdbId.replace('tt', '');
-
-    // Step 2: Search OpenSubtitles using the numeric IMDb ID
-    const searchRes = await fetch(`https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdbIdNumeric}&per_page=100`, {
-      headers: { 'Api-Key': openSubtitlesApiKey, 'Accept': 'application/json' },
-    });
-    
-    if (!searchRes.ok) {
-        const errorText = await searchRes.text();
-        console.error("OpenSubtitles search failed:", searchRes.status, errorText);
-        return NextResponse.json({ error: 'Failed to fetch from OpenSubtitles' }, { status: searchRes.status });
-    }
-    
-    const searchData = await searchRes.json();
-
-    if (!searchData.data || searchData.data.length === 0) {
-      return NextResponse.json([]);
+      return NextResponse.json({ error: "No imdb_id found for this TMDB ID" }, { status: 404 });
     }
 
-    const sortedSubs = searchData.data.sort((a: Subtitle, b: Subtitle) => b.attributes.download_count - a.attributes.download_count);
+    // 2. Convert IMDB ID → numeric only
+    const imdbNumericId = imdbId.replace("tt", ""); // e.g. tt0133093 → 0133093
 
-    const downloadPromises = sortedSubs.map(async (sub: Subtitle) => {
-      try {
-        if (!sub.attributes.files || sub.attributes.files.length === 0) return null;
-
-        const fileId = sub.attributes.files[0].file_id;
-        const language = normalizeLang(sub.attributes.language);
-        let originalFileName = sub.attributes.files[0].file_name || `${sub.attributes.feature_details.movie_name}.${language}.srt`;
-
-        const downloadReqRes = await fetch('https://api.opensubtitles.com/api/v1/download', {
-          method: 'POST',
-          headers: { 'Api-Key': openSubtitlesApiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ file_id: fileId }),
-        });
-        
-        if (!downloadReqRes.ok) {
-            console.warn(`Failed to get download link for file ID ${fileId}`);
-            return null;
-        }
-        
-        const downloadData = await downloadReqRes.json();
-        const downloadUrl = downloadData.link;
-
-        if (!downloadUrl) {
-            console.warn(`No download link in response for file ID ${fileId}`);
-            return null;
-        }
-
-        const subtitleContentRes = await fetch(downloadUrl);
-        if (!subtitleContentRes.ok) {
-            console.warn(`Failed to download subtitle content from ${downloadUrl}`);
-            return null;
-        }
-
-        let subtitleText: string;
-        const isCompressed = downloadUrl.endsWith(".gz") || subtitleContentRes.headers.get("content-encoding") === "gzip";
-
-        try {
-            if (isCompressed) {
-                const arrayBuffer = await subtitleContentRes.arrayBuffer();
-                const buffer = Buffer.from(arrayBuffer);
-                subtitleText = gunzipSync(buffer).toString("utf-8");
-            } else {
-                subtitleText = await subtitleContentRes.text();
-            }
-        } catch (gunzipError) {
-             console.error("Error decompressing subtitle:", gunzipError);
-             return null;
-        }
-        
-        let vttText = subtitleText;
-        let finalFileName = originalFileName;
-
-        if (originalFileName.toLowerCase().endsWith(".srt")) {
-            vttText = srtToVtt(subtitleText);
-            finalFileName = finalFileName.replace(/\.srt$/i, ".vtt");
-        }
-
-        const buffer = Buffer.from(vttText, 'utf-8');
-        const dataUri = `data:text/vtt;base64,${buffer.toString('base64')}`;
-        
-        return {
-          language,
-          url: dataUri,
-          fileName: finalFileName,
-        };
-      } catch (e) {
-        console.error("Error processing a single subtitle:", e);
-        return null;
+    // 3. Use IMDB numeric ID with OpenSubtitles
+    const osRes = await fetch(
+      `https://api.opensubtitles.com/api/v1/subtitles?imdb_id=${imdbNumericId}`,
+      {
+        headers: {
+          "Api-Key": OPENSUBTITLES_API_KEY,
+          "Content-Type": "application/json",
+        },
       }
-    });
+    );
 
-    const successfulSubs = (await Promise.all(downloadPromises)).filter((s): s is FormattedSubtitle => s !== null);
-    
-    // Only cache if we actually found subtitles.
-    if (successfulSubs.length > 0) {
-      cache.set(cacheKey, { data: successfulSubs, timestamp: Date.now() });
+    if (!osRes.ok) {
+      throw new Error("Failed to fetch subtitles from OpenSubtitles");
     }
 
-    return NextResponse.json(successfulSubs);
+    const subtitles = await osRes.json();
 
-  } catch (error) {
-    console.error('Error fetching subtitles:', error);
-    return NextResponse.json({ error: 'An internal error occurred' }, { status: 500 });
+    return NextResponse.json({ imdbId, imdbNumericId, subtitles });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
