@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar, ScrollAreaViewport } from '@/components/ui/scroll-area';
-import { Send, Settings, User, SmilePlus, Search, Loader2, Shield } from 'lucide-react';
+import { Send, Settings, User, SmilePlus, Search, Loader2, Shield, Save } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { database } from '@/lib/firebase';
 import { ref, push, serverTimestamp, update, get } from 'firebase/database';
@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
 
 interface Message {
     id: string;
@@ -54,6 +55,10 @@ export function Chat({ roomId, messages }: ChatProps) {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     
+    // Edit Profile State
+    const [newUsername, setNewUsername] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
     // GIF state
     const [isGifPickerOpen, setIsGifPickerOpen] = useState(false);
     const [gifSearchQuery, setGifSearchQuery] = useState('');
@@ -69,7 +74,9 @@ export function Chat({ roomId, messages }: ChatProps) {
     useEffect(() => {
         const storedUser = localStorage.getItem('cinesync_user');
         if (storedUser) {
-            setUser(JSON.parse(storedUser));
+            const parsedUser = JSON.parse(storedUser);
+            setUser(parsedUser);
+            setNewUsername(parsedUser.name);
         }
     }, []);
 
@@ -121,37 +128,31 @@ export function Chat({ roomId, messages }: ChatProps) {
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file && user) {
+            setIsSaving(true);
             const reader = new FileReader();
             reader.onloadend = async () => {
                 const newAvatar = reader.result as string;
                 const updatedUser = { ...user, avatar: newAvatar };
                 
                 try {
-                    // 1. Update user in localStorage and state
-                    setUser(updatedUser);
-                    localStorage.setItem('cinesync_user', JSON.stringify(updatedUser));
-                    
-                    // 2. Prepare updates for Firebase
                     const updates: { [key: string]: any } = {};
-                    
-                    // 3. Update global user record
                     updates[`/users/${user.id}/avatar`] = newAvatar;
                     
-                    // 4. Update user record in all rooms they are a part of
                     const roomsSnapshot = await get(ref(database, 'rooms'));
                     if (roomsSnapshot.exists()) {
                         const allRooms = roomsSnapshot.val();
                         Object.keys(allRooms).forEach(roomId => {
-                            const room = allRooms[roomId];
-                            if (room.users && room.users[user.id]) {
+                            if (allRooms[roomId].users?.[user.id]) {
                                 updates[`/rooms/${roomId}/users/${user.id}/avatar`] = newAvatar;
                             }
                         });
                     }
 
-                    // 5. Execute all updates simultaneously
                     await update(ref(database), updates);
 
+                    setUser(updatedUser);
+                    localStorage.setItem('cinesync_user', JSON.stringify(updatedUser));
+                    
                     toast({
                         title: "Avatar Updated",
                         description: "Your new profile picture has been saved.",
@@ -164,14 +165,57 @@ export function Chat({ roomId, messages }: ChatProps) {
                         title: "Update Failed",
                         description: "Could not save your new avatar. Please try again.",
                     });
-                     // Revert client-side changes on failure
-                    setUser(user);
-                    localStorage.setItem('cinesync_user', JSON.stringify(user));
                 } finally {
-                    setIsSettingsOpen(false);
+                    setIsSaving(false);
                 }
             };
             reader.readAsDataURL(file);
+        }
+    };
+
+    const handleProfileUpdate = async () => {
+        if (!user || !newUsername.trim() || newUsername.trim() === user.name) {
+            setIsSettingsOpen(false);
+            return;
+        };
+
+        setIsSaving(true);
+        const updatedUser = { ...user, name: newUsername.trim() };
+
+        try {
+            const updates: { [key: string]: any } = {};
+            updates[`/users/${user.id}/name`] = updatedUser.name;
+
+            const roomsSnapshot = await get(ref(database, 'rooms'));
+            if (roomsSnapshot.exists()) {
+                const allRooms = roomsSnapshot.val();
+                Object.keys(allRooms).forEach(roomId => {
+                    if (allRooms[roomId].users?.[user.id]) {
+                        updates[`/rooms/${roomId}/users/${user.id}/name`] = updatedUser.name;
+                    }
+                });
+            }
+
+            await update(ref(database), updates);
+
+            setUser(updatedUser);
+            localStorage.setItem('cinesync_user', JSON.stringify(updatedUser));
+
+            toast({
+                title: "Profile Updated",
+                description: "Your username has been changed.",
+            });
+
+        } catch (error) {
+            console.error("Failed to update profile:", error);
+            toast({
+                variant: 'destructive',
+                title: "Update Failed",
+                description: "Could not save your changes. Please try again.",
+            });
+        } finally {
+            setIsSaving(false);
+            setIsSettingsOpen(false);
         }
     };
 
@@ -211,11 +255,27 @@ export function Chat({ roomId, messages }: ChatProps) {
                                 <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
-                            <Button onClick={() => fileInputRef.current?.click()}>Change Picture</Button>
-                            <div className="w-full space-y-2 text-center">
-                               <p className="font-semibold text-lg">{user.name}</p>
-                               <p className="text-sm text-muted-foreground">{user.email}</p>
+                            <Button onClick={() => fileInputRef.current?.click()} disabled={isSaving}>Change Picture</Button>
+                            
+                            <div className="w-full space-y-2 text-left">
+                               <Label htmlFor="username-input">Username</Label>
+                               <Input 
+                                 id="username-input"
+                                 value={newUsername}
+                                 onChange={(e) => setNewUsername(e.target.value)}
+                                 className="bg-input"
+                                 disabled={isSaving}
+                               />
+                               <p className="text-sm text-muted-foreground mt-2">
+                                 Your email: {user.email}
+                               </p>
                             </div>
+
+                            <Button onClick={handleProfileUpdate} disabled={isSaving || newUsername.trim() === user.name} className="w-full">
+                                {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+                                Save Changes
+                            </Button>
+
                             <Button variant="secondary" asChild className="w-full">
                                 <Link href="/admin">
                                     <Shield className="mr-2 h-4 w-4" /> Admin Panel
@@ -311,3 +371,5 @@ export function Chat({ roomId, messages }: ChatProps) {
         </div>
     );
 }
+
+    
