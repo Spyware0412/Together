@@ -2,11 +2,13 @@
 
 import * as React from "react"
 import { themes } from "@/lib/themes"
+import { cn } from "@/lib/utils"
 
 type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: string
   storageKey?: string
+  className?: string
 }
 
 type ThemeProviderState = {
@@ -25,23 +27,12 @@ export function ThemeProvider({
   children,
   defaultTheme = "theme-default",
   storageKey = "cinesync-theme",
+  className,
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = React.useState(
     () => (typeof window !== 'undefined' ? localStorage.getItem(storageKey) : defaultTheme) || defaultTheme
   )
-
-  React.useEffect(() => {
-    const root = window.document.documentElement
-    
-    // Remove all possible theme classes before adding the new one.
-    root.classList.remove(...themes.map(t => t.name));
-
-    if (theme) {
-      root.classList.add(theme);
-    }
-
-  }, [theme])
 
   const value = {
     theme,
@@ -53,7 +44,13 @@ export function ThemeProvider({
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
-        {children}
+        <div className={cn(
+          theme,
+          "h-full w-full flex flex-col bg-background text-foreground",
+          className
+        )}>
+          {children}
+        </div>
     </ThemeProviderContext.Provider>
   )
 }

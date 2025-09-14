@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { themes, Theme } from '@/lib/themes';
-import { useTheme } from '@/context/theme-provider';
+import { ThemeProvider, useTheme } from '@/context/theme-provider';
 
 interface Message {
     id: string;
@@ -40,7 +40,7 @@ interface UserProfile {
     online?: boolean;
 }
 
-export default function RoomPage() {
+function RoomPageContent() {
   const params = useParams();
   const router = useRouter();
   const roomId = params.id as string;
@@ -183,6 +183,17 @@ export default function RoomPage() {
   if (!roomId) {
     return null; // Or a loading state
   }
+  
+  const ChatComponents = () => (
+    <>
+      <div className="flex-1 min-h-0">
+        <Chat roomId={roomId} onNewMessage={handleNewMessage} />
+      </div>
+      <div className="border-t border-border">
+        <ContentSuggester />
+      </div>
+    </>
+  );
 
   return (
     <div className="flex h-screen max-h-screen bg-background text-foreground overflow-hidden relative">
@@ -291,16 +302,16 @@ export default function RoomPage() {
                       <MessageSquare className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-[350px] p-0 flex flex-col bg-card/80">
+                  <SheetContent side="right" className="w-[350px] p-0 flex flex-col">
                      <SheetHeader className="p-4 border-b">
                         <SheetTitle>Chat & Tools</SheetTitle>
                      </SheetHeader>
-                     <div className="flex-1 min-h-0">
-                        <Chat roomId={roomId} onNewMessage={handleNewMessage} />
-                      </div>
-                      <div className="border-t border-border">
-                        <ContentSuggester />
-                      </div>
+                     <ThemeProvider
+                        storageKey="cinesync-theme"
+                        defaultTheme="theme-default"
+                      >
+                        <ChatComponents />
+                      </ThemeProvider>
                   </SheetContent>
                 </Sheet>
               </div>
@@ -317,14 +328,23 @@ export default function RoomPage() {
           />
         </div>
       </main>
-      <aside className="w-[350px] bg-card/80 border-l border-border flex-col hidden md:flex">
-        <div className="flex-1 min-h-0">
-          <Chat roomId={roomId} onNewMessage={handleNewMessage} />
-        </div>
-        <div className="border-t border-border">
-          <ContentSuggester />
-        </div>
+      <aside className="w-[350px] border-l border-border flex-col hidden md:flex">
+         <ThemeProvider
+            storageKey="cinesync-theme"
+            defaultTheme="theme-default"
+          >
+           <ChatComponents />
+        </ThemeProvider>
       </aside>
     </div>
+  );
+}
+
+
+export default function RoomPage() {
+  return (
+    <ThemeProvider storageKey="cinesync-theme-global">
+      <RoomPageContent />
+    </ThemeProvider>
   );
 }

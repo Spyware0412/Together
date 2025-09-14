@@ -1,7 +1,6 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import { ThemeProvider } from '@/context/theme-provider';
 
 export const metadata: Metadata = {
   title: 'Together 💖',
@@ -20,14 +19,9 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
       </head>
-      <body className="font-body antialiased">
-        <ThemeProvider
-          storageKey="cinesync-theme"
-          defaultTheme="theme-default"
-        >
+      <body className="font-body antialiased theme-default">
           {children}
           <Toaster />
-        </ThemeProvider>
       </body>
     </html>
   );
