@@ -48,57 +48,64 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
         const usersRef = ref(database, 'users');
         const roomsRef = ref(database, 'rooms');
 
-        // Combined logic to get users from both /users and /rooms/{id}/users
-        const onData = (usersSnapshot: any, roomsSnapshot: any) => {
+        const handleData = (usersSnapshot: any, roomsSnapshot: any) => {
             const allUsersMap = new Map<string, User>();
 
             // 1. Get users from global /users list
             const globalUsersData = usersSnapshot.val();
             if (globalUsersData) {
                 Object.keys(globalUsersData).forEach(key => {
-                    if(!allUsersMap.has(key)) {
+                    if (!allUsersMap.has(key)) {
                         allUsersMap.set(key, { ...globalUsersData[key], id: key });
                     }
                 });
             }
 
-            // 2. Get users from within each room
+            // 2. Get users from within each room and aggregate them
             const roomsData = roomsSnapshot.val();
             if (roomsData) {
-                 const roomList = Object.keys(roomsData).map(key => ({ id: key, ...roomsData[key] }));
-                 setRooms(roomList);
+                const roomList = Object.keys(roomsData).map(key => ({ id: key, ...roomsData[key] }));
+                setRooms(roomList);
 
-                 Object.values(roomsData).forEach((room: any) => {
-                     if (room.users) {
-                         Object.keys(room.users).forEach(userId => {
-                             if (!allUsersMap.has(userId)) {
-                                 const user = room.users[userId];
-                                 allUsersMap.set(userId, { ...user, id: userId });
-                             }
-                         });
-                     }
-                 });
+                Object.values(roomsData).forEach((room: any) => {
+                    if (room.users) {
+                        Object.keys(room.users).forEach(userId => {
+                            if (!allUsersMap.has(userId)) {
+                                const user = room.users[userId];
+                                // Ensure user object is valid before adding
+                                if (user && user.name && user.email) {
+                                     allUsersMap.set(userId, { ...user, id: userId });
+                                }
+                            }
+                        });
+                    }
+                });
             } else {
                 setRooms([]);
             }
 
             setUsers(Array.from(allUsersMap.values()));
         };
-        
-        let usersSnapshot: any, roomsSnapshot: any;
 
+        let usersSnapshot: any, roomsSnapshot: any;
+        const onData = () => {
+             if (usersSnapshot !== undefined && roomsSnapshot !== undefined) {
+                handleData(usersSnapshot, roomsSnapshot);
+            }
+        }
+        
         const usersListener = onValue(usersRef, (snapshot) => {
             usersSnapshot = snapshot;
-            if(roomsSnapshot !== undefined) onData(usersSnapshot, roomsSnapshot);
-        });
+            onData();
+        }, { onlyOnce: false });
 
         const roomsListener = onValue(roomsRef, (snapshot) => {
             roomsSnapshot = snapshot;
-            if(usersSnapshot !== undefined) onData(usersSnapshot, roomsSnapshot);
-        });
+            onData();
+        }, { onlyOnce: false });
+
 
         return () => {
-            // Detach listeners using the returned unsubscribe functions
             usersListener();
             roomsListener();
         };
@@ -287,3 +294,5 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
         </div>
     );
 }
+
+    

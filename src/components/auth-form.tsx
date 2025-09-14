@@ -62,7 +62,8 @@ export function AuthForm() {
                 // User with this email already exists.
                 const usersData = snapshot.val();
                 const userId = Object.keys(usersData)[0];
-                userProfile = { ...usersData[userId], id: userId };
+                const existingUser = usersData[userId];
+                userProfile = { ...existingUser, id: userId };
                 
                 // If username has changed, update it.
                 if (userProfile.name !== data.username) {
@@ -163,3 +164,5 @@ export function AuthForm() {
     </Form>
   );
 }
+
+    
