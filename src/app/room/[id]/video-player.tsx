@@ -629,7 +629,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
       <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" preload="metadata" />
       <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       
-      <div className="absolute inset-0 z-10 pointer-events-none">
+      <div className={cn("absolute inset-0 z-50 pointer-events-none", showControls || !roomState?.isPlaying || isChatOverlayOpen ? "opacity-100" : "opacity-0")}>
         {isPlaybackDisabled && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 pointer-events-auto">
             <Alert className="max-w-md">
@@ -646,7 +646,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           </div>
         )}
 
-        <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 pointer-events-auto", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0")}>
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 pointer-events-auto">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono text-white">{formatTime(progress)}</span>
@@ -928,5 +928,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     </div>
   );
 }
+
+    
 
     
