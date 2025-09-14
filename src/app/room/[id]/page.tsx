@@ -6,10 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video, Loader2, Palette } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video, Loader2, Sun, Moon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off, update, serverTimestamp, set } from 'firebase/database';
@@ -17,7 +17,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { themes, Theme } from '@/lib/themes';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -52,7 +51,7 @@ export default function RoomPage() {
   const [isUrlDialogOpen, setIsUrlDialogOpen] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
   const [isResolvingUrl, setIsResolvingUrl] = useState(false);
-  const [theme, setTheme] = useState('theme-default');
+  const [theme, setTheme] = useState('dark');
   
   const { toast } = useToast();
   const userStatusRef = useRef<any>(null);
@@ -65,13 +64,24 @@ export default function RoomPage() {
   }, [activeUsers]);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('cinesync-theme-global') || 'theme-default';
+    const savedTheme = localStorage.getItem('cinesync-theme') || 'dark';
     setTheme(savedTheme);
+    if (savedTheme === 'light') {
+        document.documentElement.classList.add('light');
+    } else {
+        document.documentElement.classList.remove('light');
+    }
   }, []);
 
-  const handleSetTheme = (newTheme: string) => {
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-    localStorage.setItem('cinesync-theme-global', newTheme);
+    localStorage.setItem('cinesync-theme', newTheme);
+    if (newTheme === 'light') {
+        document.documentElement.classList.add('light');
+    } else {
+        document.documentElement.classList.remove('light');
+    }
   };
 
   useEffect(() => {
@@ -254,25 +264,11 @@ export default function RoomPage() {
                 </DialogContent>
               </Dialog>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Palette className="w-4 h-4 mr-2" />
-                    Theme
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Select a Theme</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuRadioGroup value={theme} onValueChange={handleSetTheme}>
-                    {themes.map((themeOption) => (
-                      <DropdownMenuRadioItem key={themeOption.name} value={themeOption.name}>
-                        {themeOption.label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+               <Button variant="outline" size="icon" onClick={toggleTheme} title="Toggle Theme">
+                  <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                  <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -313,7 +309,7 @@ export default function RoomPage() {
                       <MessageSquare className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className={cn("w-[350px] p-0 flex flex-col", theme)}>
+                  <SheetContent side="right" className="w-[350px] p-0 flex flex-col">
                      <SheetHeader className="p-4 border-b">
                         <SheetTitle>Chat & Tools</SheetTitle>
                      </SheetHeader>
@@ -334,11 +330,9 @@ export default function RoomPage() {
           />
         </div>
       </main>
-      <aside className={cn("w-[350px] border-l border-border flex-col hidden md:flex", theme)}>
+      <aside className="w-[350px] border-l border-border flex-col hidden md:flex">
          <ChatComponents />
       </aside>
     </div>
   );
 }
-
-    
