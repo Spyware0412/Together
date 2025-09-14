@@ -584,7 +584,8 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" preload="metadata" />
       <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       
-      <div className="absolute inset-0 z-10 pointer-events-none">
+      <div className="absolute inset-0 z-50 pointer-events-none">
+
         {isPlaybackDisabled && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 pointer-events-auto">
             <Alert className="max-w-md">
@@ -809,6 +810,3 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
-
-    
-
