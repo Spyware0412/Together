@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { themes, Theme } from "@/lib/themes"
+import { themes } from "@/lib/themes"
+import { AnimatePresence, motion } from "framer-motion"
 
 type ThemeProviderProps = {
   children: React.ReactNode
@@ -40,8 +41,6 @@ export function ThemeProvider({
     root.classList.remove(...themes.map(t => t.name))
 
     if (theme === "system") {
-      // This part is not fully implemented as per user request (no system theme)
-      // but is good practice to keep for future extensions.
       const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
         .matches
         ? "dark"
@@ -63,7 +62,17 @@ export function ThemeProvider({
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
-      {children}
+        <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+                key={theme}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+            >
+                {children}
+            </motion.div>
+        </AnimatePresence>
     </ThemeProviderContext.Provider>
   )
 }
