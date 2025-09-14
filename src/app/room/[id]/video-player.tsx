@@ -280,19 +280,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     };
   }, [roomId]);
 
-  useEffect(() => {
-    const playerEl = playerRef.current;
-    if (!playerEl) return;
-    
-    // Use inert attribute to manage focus for accessibility
-    if (isInfoOpen || isSettingsOpen) {
-      playerEl.setAttribute('inert', '');
-    } else {
-      playerEl.removeAttribute('inert');
-    }
-  }, [isInfoOpen, isSettingsOpen]);
-
-
   const syncState = useCallback((state: Partial<RoomState>) => {
       if (isRemoteUpdate.current) return;
       update(roomStateRef, state);
@@ -651,32 +638,32 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
         "absolute top-0 right-0 z-20 p-2 flex items-center gap-2 transition-opacity duration-300 pointer-events-auto",
         (showControls || !roomState?.isPlaying) ? "opacity-100" : "opacity-0"
       )}>
-        <DropdownMenu onOpenChange={setIsInfoOpen} modal={false}>
+        <DropdownMenu onOpenChange={setIsInfoOpen}>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><Info /></Button>
             </DropdownMenuTrigger>
-            <DropdownMenuPortal container={playerRef.current}>
-                <DropdownMenuContent className="w-96" align="end">
-                <div className="grid gap-3 p-2">
+            <DropdownMenuPortal>
+                <DropdownMenuContent className="w-96 z-[9999] bg-background shadow-lg rounded-md" align="end">
+                  <div className="grid gap-3 p-2">
                     <h4 className="font-medium leading-none">Video Info</h4>
                     <div className="text-sm space-y-2">
-                        <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? 'N/A'}</span></p>
-                        <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
-                        <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
-                        <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
-                        <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
+                      <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? 'N/A'}</span></p>
+                      <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
+                      <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
+                      <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
+                      <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
                     </div>
-                </div>
+                  </div>
                 </DropdownMenuContent>
             </DropdownMenuPortal>
         </DropdownMenu>
 
-        <DropdownMenu onOpenChange={setIsSettingsOpen} modal={false}>
+        <DropdownMenu onOpenChange={setIsSettingsOpen}>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><Settings /></Button>
             </DropdownMenuTrigger>
-            <DropdownMenuPortal container={playerRef.current}>
-                <DropdownMenuContent className="w-96" align="end">
+            <DropdownMenuPortal>
+                <DropdownMenuContent className="w-96 z-[9999] bg-background shadow-lg rounded-md" align="end">
                     <div className="grid gap-4 p-2">
                         <div className="grid gap-2">
                             <Label className="font-medium leading-none">Subtitles</Label>
@@ -938,5 +925,3 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     </div>
   );
 }
-
-    
