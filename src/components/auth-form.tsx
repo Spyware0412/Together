@@ -11,9 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
-import { User, Loader2 } from 'lucide-react';
+import { User, Loader2, Settings } from 'lucide-react';
 import { database } from '@/lib/firebase';
-import { ref, query, orderByChild, equalTo, get, set } from 'firebase/database';
+import { ref, query, orderByChild, equalTo, get, set, update } from 'firebase/database';
+import { ProfileSettings } from './profile-settings';
 
 const formSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters long."),
@@ -22,7 +23,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface UserProfile {
+export interface UserProfile {
     id: string;
     name: string;
     email: string;
@@ -43,6 +44,7 @@ export function AuthForm() {
     const { toast } = useToast();
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -72,8 +74,9 @@ export function AuthForm() {
                 const userId = Object.keys(usersData)[0];
                 const existingUser: UserProfile = { ...usersData[userId], id: userId };
 
+                // If email exists, check if username also matches.
                 if (existingUser.name.toLowerCase() !== data.username.toLowerCase()) {
-                    toast({
+                     toast({
                         variant: "destructive",
                         title: "Login Failed",
                         description: "A user with this email already exists with a different username.",
@@ -81,9 +84,9 @@ export function AuthForm() {
                     setIsLoading(false);
                     return;
                 }
-
+                
                 userProfile = existingUser;
-
+                
                 if (userProfile.name.toLowerCase() === 'manoshi') {
                      const randomMessage = manoshiMessages[Math.floor(Math.random() * manoshiMessages.length)];
                      toast({
@@ -98,6 +101,7 @@ export function AuthForm() {
                 }
 
             } else {
+                // User does not exist, create a new one.
                 const userId = `user_${uuidv4()}`;
                 userProfile = {
                     id: userId,
@@ -147,9 +151,20 @@ export function AuthForm() {
         return (
             <div className="space-y-4 text-center">
                 <p className="font-semibold">Welcome back, {user.name}!</p>
-                <Button onClick={handleLogout} variant="outline" className="w-full">
-                    <User className="mr-2" /> Log Out
-                </Button>
+                <div className="flex gap-2">
+                    <Button onClick={handleLogout} variant="outline" className="w-full">
+                        <User className="mr-2" /> Log Out
+                    </Button>
+                     <ProfileSettings
+                        user={user}
+                        setUser={setUser}
+                        trigger={
+                            <Button variant="secondary" className="w-full">
+                                <Settings className="mr-2" /> Settings
+                            </Button>
+                        }
+                    />
+                </div>
             </div>
         );
     }
