@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -7,7 +8,7 @@ import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
 import { Clapperboard, MessageSquare, Play } from 'lucide-react';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
@@ -314,8 +315,11 @@ export default function RoomPage() {
                       <MessageSquare className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-full max-w-sm p-0 flex flex-col bg-background/80 backdrop-blur-sm">
-                     <ChatComponents />
+                   <SheetContent side="right" className="w-full max-w-sm p-0 flex flex-col bg-background/80 backdrop-blur-sm">
+                      <SheetHeader className="p-4 border-b">
+                        <SheetTitle>Chat & Tools</SheetTitle>
+                      </SheetHeader>
+                      <ChatComponents />
                   </SheetContent>
                 </Sheet>
               </div>
