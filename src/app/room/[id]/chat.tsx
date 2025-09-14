@@ -11,10 +11,11 @@ import { ScrollArea, ScrollBar, ScrollAreaViewport } from '@/components/ui/scrol
 import { Send, Settings, User, SmilePlus, Search, Loader2, Shield } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { database } from '@/lib/firebase';
-import { ref, push, serverTimestamp } from 'firebase/database';
+import { ref, push, serverTimestamp, update, get } from 'firebase/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
     id: string;
@@ -60,6 +61,7 @@ export function Chat({ roomId, messages }: ChatProps) {
     const [isSearchingGifs, startGifSearchTransition] = useTransition();
     const debouncedSearchTerm = useDebounce(gifSearchQuery, 300);
 
+    const { toast } = useToast();
     const viewportRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const messagesRef = ref(database, `rooms/${roomId}/chat`);
@@ -120,12 +122,54 @@ export function Chat({ roomId, messages }: ChatProps) {
         const file = e.target.files?.[0];
         if (file && user) {
             const reader = new FileReader();
-            reader.onloadend = () => {
+            reader.onloadend = async () => {
                 const newAvatar = reader.result as string;
                 const updatedUser = { ...user, avatar: newAvatar };
-                setUser(updatedUser);
-                localStorage.setItem('cinesync_user', JSON.stringify(updatedUser));
-                setIsSettingsOpen(false); // Close dialog on change
+                
+                try {
+                    // 1. Update user in localStorage and state
+                    setUser(updatedUser);
+                    localStorage.setItem('cinesync_user', JSON.stringify(updatedUser));
+                    
+                    // 2. Prepare updates for Firebase
+                    const updates: { [key: string]: any } = {};
+                    
+                    // 3. Update global user record
+                    updates[`/users/${user.id}/avatar`] = newAvatar;
+                    
+                    // 4. Update user record in all rooms they are a part of
+                    const roomsSnapshot = await get(ref(database, 'rooms'));
+                    if (roomsSnapshot.exists()) {
+                        const allRooms = roomsSnapshot.val();
+                        Object.keys(allRooms).forEach(roomId => {
+                            const room = allRooms[roomId];
+                            if (room.users && room.users[user.id]) {
+                                updates[`/rooms/${roomId}/users/${user.id}/avatar`] = newAvatar;
+                            }
+                        });
+                    }
+
+                    // 5. Execute all updates simultaneously
+                    await update(ref(database), updates);
+
+                    toast({
+                        title: "Avatar Updated",
+                        description: "Your new profile picture has been saved.",
+                    });
+
+                } catch (error) {
+                    console.error("Failed to update avatar:", error);
+                    toast({
+                        variant: 'destructive',
+                        title: "Update Failed",
+                        description: "Could not save your new avatar. Please try again.",
+                    });
+                     // Revert client-side changes on failure
+                    setUser(user);
+                    localStorage.setItem('cinesync_user', JSON.stringify(user));
+                } finally {
+                    setIsSettingsOpen(false);
+                }
             };
             reader.readAsDataURL(file);
         }
@@ -267,5 +311,3 @@ export function Chat({ roomId, messages }: ChatProps) {
         </div>
     );
 }
-
-    
