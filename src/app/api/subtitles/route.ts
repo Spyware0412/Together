@@ -34,21 +34,26 @@ const srtToVtt = (srtText: string): string => {
   let vtt = "WEBVTT\n\n";
   const srtLines = srtText.trim().replace(/\r/g, '').split('\n');
 
-  let i = 0;
-  while (i < srtLines.length) {
-    if (srtLines[i].match(/^\d+$/) && srtLines[i+1]?.includes('-->')) {
-      const timeLine = srtLines[i+1].replace(/,/g, '.');
-      vtt += timeLine + "\n";
-      i += 2;
-
-      let text = "";
-      while (i < srtLines.length && srtLines[i].trim() !== "") {
-        text += srtLines[i] + "\n";
-        i++;
+  for (let i = 0; i < srtLines.length; i++) {
+    const line = srtLines[i];
+    if (line.includes('-->')) {
+      // Look for a sequence number on the previous line
+      const potentialIndex = srtLines[i - 1];
+      if (potentialIndex && /^\d+$/.test(potentialIndex)) {
+        vtt += `${i === 1 ? '' : '\n'}${potentialIndex}\n`;
       }
-      vtt += text.trim() + "\n\n";
-    } else {
-        i++;
+      
+      const timeLine = line.replace(/,/g, '.');
+      vtt += `${timeLine}\n`;
+
+      let textLines = [];
+      let j = i + 1;
+      while (j < srtLines.length && srtLines[j].trim() !== '') {
+        textLines.push(srtLines[j]);
+        j++;
+      }
+      vtt += textLines.join('\n') + '\n\n';
+      i = j;
     }
   }
   return vtt;
@@ -58,8 +63,12 @@ const srtToVtt = (srtText: string): string => {
 const normalizeLang = (lang: string) => {
   if (!lang) return "unknown";
   const lowerLang = lang.toLowerCase();
-  if (lowerLang === "en" || lowerLang === "eng") return "eng";
-  return lowerLang;
+  const mapping: { [key: string]: string } = {
+    "en": "eng",
+    "english": "eng",
+    "en-us": "eng",
+  };
+  return mapping[lowerLang] || lowerLang.substring(0, 3);
 };
 
 export async function GET(request: NextRequest) {
@@ -86,12 +95,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Step 1: Get IMDb ID from TMDb using the tmdb_id
-    const tmdbDetailsRes = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}`, {
-        headers: {
-            'Authorization': `Bearer ${tmdbApiKey}`,
-            'Accept': 'application/json'
-        }
-    });
+    const tmdbDetailsRes = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${tmdbApiKey}`);
 
     if (!tmdbDetailsRes.ok) {
         console.error(`TMDb details fetch failed for ID ${tmdbId}:`, tmdbDetailsRes.status, await tmdbDetailsRes.text());
@@ -122,7 +126,6 @@ export async function GET(request: NextRequest) {
     const searchData = await searchRes.json();
 
     if (!searchData.data || searchData.data.length === 0) {
-      cache.set(cacheKey, { data: [], timestamp: Date.now() });
       return NextResponse.json([]);
     }
 
@@ -164,20 +167,25 @@ export async function GET(request: NextRequest) {
         let subtitleText: string;
         const isCompressed = downloadUrl.endsWith(".gz") || subtitleContentRes.headers.get("content-encoding") === "gzip";
 
-        if (isCompressed) {
-            const arrayBuffer = await subtitleContentRes.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            subtitleText = gunzipSync(buffer).toString("utf-8");
-        } else {
-            subtitleText = await subtitleContentRes.text();
+        try {
+            if (isCompressed) {
+                const arrayBuffer = await subtitleContentRes.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+                subtitleText = gunzipSync(buffer).toString("utf-8");
+            } else {
+                subtitleText = await subtitleContentRes.text();
+            }
+        } catch (gunzipError) {
+             console.error("Error decompressing subtitle:", gunzipError);
+             return null;
         }
         
         let vttText = subtitleText;
         let finalFileName = originalFileName;
 
-        if (originalFileName.toLowerCase().endsWith(".srt") || !finalFileName.toLowerCase().endsWith('.vtt')) {
+        if (originalFileName.toLowerCase().endsWith(".srt")) {
             vttText = srtToVtt(subtitleText);
-            finalFileName = finalFileName.replace(/\.[^/.]+$/, "") + ".vtt";
+            finalFileName = finalFileName.replace(/\.srt$/i, ".vtt");
         }
 
         const buffer = Buffer.from(vttText, 'utf-8');
@@ -196,12 +204,11 @@ export async function GET(request: NextRequest) {
 
     const successfulSubs = (await Promise.all(downloadPromises)).filter((s): s is FormattedSubtitle => s !== null);
     
-    if (successfulSubs.length === 0) {
-      cache.set(cacheKey, { data: [], timestamp: Date.now() });
-      return NextResponse.json([]);
+    // Only cache if we actually found subtitles.
+    if (successfulSubs.length > 0) {
+      cache.set(cacheKey, { data: successfulSubs, timestamp: Date.now() });
     }
 
-    cache.set(cacheKey, { data: successfulSubs, timestamp: Date.now() });
     return NextResponse.json(successfulSubs);
 
   } catch (error) {
