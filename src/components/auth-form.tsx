@@ -62,16 +62,13 @@ export function AuthForm() {
                 // User with this email already exists.
                 const usersData = snapshot.val();
                 const userId = Object.keys(usersData)[0];
-                const existingUser = usersData[userId];
-                userProfile = { ...existingUser, id: userId };
-                
-                // If username has changed, update it.
+                userProfile = { ...usersData[userId], id: userId };
+
+                // If username in form is different, just log in with existing data, don't update.
                 if (userProfile.name !== data.username) {
-                    await update(ref(database, `users/${userId}`), { name: data.username });
-                    userProfile.name = data.username;
-                    toast({
-                        title: "Username Updated!",
-                        description: `Logged in as ${userProfile.name}.`,
+                     toast({
+                        title: "Welcome Back!",
+                        description: `Logged in as ${userProfile.name}. Your username has not been changed.`,
                     });
                 } else {
                      toast({
@@ -164,5 +161,3 @@ export function AuthForm() {
     </Form>
   );
 }
-
-    
