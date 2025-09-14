@@ -59,12 +59,10 @@ export function AuthForm() {
             let userProfile: UserProfile;
 
             if (snapshot.exists()) {
-                // User with this email already exists.
                 const usersData = snapshot.val();
                 const userId = Object.keys(usersData)[0];
                 const existingUser: UserProfile = { ...usersData[userId], id: userId };
 
-                // Check if the username also matches
                 if (existingUser.name.toLowerCase() !== data.username.toLowerCase()) {
                     toast({
                         variant: "destructive",
@@ -72,10 +70,9 @@ export function AuthForm() {
                         description: "A user with this email already exists with a different username.",
                     });
                     setIsLoading(false);
-                    return; // Stop the login process
+                    return;
                 }
 
-                // Both email and username match, log the user in.
                 userProfile = existingUser;
 
                 if (userProfile.name.toLowerCase() === 'manoshi') {
@@ -91,7 +88,6 @@ export function AuthForm() {
                 }
 
             } else {
-                // New user, create a profile.
                 const userId = `user_${uuidv4()}`;
                 userProfile = {
                     id: userId,
