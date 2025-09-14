@@ -65,7 +65,7 @@ export function AuthForm() {
                 const existingUser: UserProfile = { ...usersData[userId], id: userId };
 
                 // Check if the username also matches
-                if (existingUser.name !== data.username) {
+                if (existingUser.name.toLowerCase() !== data.username.toLowerCase()) {
                     toast({
                         variant: "destructive",
                         title: "Login Failed",
@@ -77,10 +77,18 @@ export function AuthForm() {
 
                 // Both email and username match, log the user in.
                 userProfile = existingUser;
-                toast({
-                    title: "Welcome Back!",
-                    description: `Logged in as ${userProfile.name}.`,
-                });
+
+                if (userProfile.name.toLowerCase() === 'manoshi') {
+                     toast({
+                        title: "Welcome, My Love! 💖",
+                        description: `So happy to see you here, ${userProfile.name}.`,
+                    });
+                } else {
+                    toast({
+                        title: "Welcome Back!",
+                        description: `Logged in as ${userProfile.name}.`,
+                    });
+                }
 
             } else {
                 // New user, create a profile.
@@ -92,10 +100,18 @@ export function AuthForm() {
                     avatar: `https://picsum.photos/seed/${userId}/200/200`
                 };
                 await set(ref(database, `users/${userId}`), userProfile);
-                toast({
-                  title: "Account Created!",
-                  description: `Welcome, ${data.username}!`,
-                });
+                
+                if (userProfile.name.toLowerCase() === 'manoshi') {
+                     toast({
+                        title: "Hey, Beautiful! Welcome! 💖",
+                        description: "This app was made for you. I hope you love it.",
+                    });
+                } else {
+                    toast({
+                      title: "Account Created!",
+                      description: `Welcome, ${data.username}!`,
+                    });
+                }
             }
 
             localStorage.setItem('cinesync_user', JSON.stringify(userProfile));
