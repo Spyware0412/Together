@@ -1,4 +1,3 @@
-
 "use client";
 
 import { AuthForm } from '@/components/auth-form';
@@ -6,12 +5,10 @@ import { RoomForm } from '@/components/room-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from '@/components/ui/separator';
 import { Film } from 'lucide-react';
-import { ParticlesBackground } from '@/components/particles-background';
 
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-background relative overflow-hidden">
-      <ParticlesBackground />
       <Card className="w-full max-w-md shadow-2xl z-10">
         <CardHeader className="text-center">
           <div className="flex justify-center items-center gap-3 mb-4">
