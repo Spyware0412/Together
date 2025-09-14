@@ -16,6 +16,8 @@ import {
   ArrowLeft,
   X,
   Info,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -29,6 +31,7 @@ import {
   update,
   onDisconnect,
   serverTimestamp,
+  push,
 } from "firebase/database";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -48,7 +51,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollAreaViewport } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
@@ -65,10 +68,13 @@ interface Message {
     text?: string;
     gif?: string;
     type: 'text' | 'gif';
+    timestamp: number;
 }
 
 interface VideoPlayerProps {
   roomId: string;
+  user: UserProfile | null;
+  messages: Message[];
   lastMessage: Message | null;
   showNotification: boolean;
   onNotificationClick: () => void;
@@ -135,7 +141,7 @@ const srtToVtt = (srtText: string): string => {
   return vtt;
 };
 
-export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificationClick, onCloseNotification, fileInputRef }: VideoPlayerProps) {
+export function VideoPlayer({ roomId, user, messages, lastMessage, showNotification, onNotificationClick, onCloseNotification, fileInputRef }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [localFileName, setLocalFileName] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
@@ -165,6 +171,8 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   const [isSearching, setIsSearching] = useState(false);
   const [searchStep, setSearchStep] = useState<'movie' | 'subtitle'>('movie');
   const [selectedMovie, setSelectedMovie] = useState<TmdbMovieSearchResult | null>(null);
+  const [isChatOverlayOpen, setIsChatOverlayOpen] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
 
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
   const localVideoUrlRef = useRef<string | null>(null);
@@ -172,11 +180,35 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const chatViewportRef = useRef<HTMLDivElement>(null);
   const isSeeking = useRef(false);
   const lastSyncTimestamp = useRef(0);
   const isRemoteUpdate = useRef(false);
 
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
+  const messagesRef = ref(database, `rooms/${roomId}/chat`);
+
+  useEffect(() => {
+    if (chatViewportRef.current) {
+        chatViewportRef.current.scrollTo({ top: chatViewportRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages, isChatOverlayOpen]);
+
+
+  const handleSendChatMessage = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (chatMessage.trim() && user) {
+            const msg = {
+                user: { id: user.id, name: user.name, avatar: user.avatar },
+                text: chatMessage.trim(),
+                type: 'text',
+                timestamp: serverTimestamp()
+            };
+            push(messagesRef, msg);
+            setChatMessage('');
+        }
+    };
+
 
   useEffect(() => {
     const player = playerRef.current;
@@ -216,8 +248,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
           }
           setLocalFileName(data.fileName ?? "Video from URL");
       } else if (data?.fileName) {
-          // This is a local file. Don't change videoSrc if it's already set to a local object URL.
-          // This prevents the video from disappearing when another user joins.
           if (videoSrc && !localVideoUrlRef.current) {
               setVideoSrc(null);
           }
@@ -472,9 +502,10 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   };
 
   const toggleFullScreen = () => {
-    if (playerRef.current) {
+    const player = playerRef.current;
+    if (player) {
       if (!document.fullscreenElement) {
-        playerRef.current.requestFullscreen().catch((err) => {
+        player.requestFullscreen().catch((err) => {
           console.error(`Error enabling fullscreen: ${err.message}`);
         });
       } else {
@@ -781,13 +812,14 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
               </div>
 
               <div className="flex items-center gap-1 text-white">
+                <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(v => !v)} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><MessageSquare /></Button>
                 <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/10"><Maximize /></Button>
               </div>
             </div>
           </div>
         </div>
-      </div>
-       <AnimatePresence>
+
+        <AnimatePresence>
           {showNotification && lastMessage && (
               <motion.div
                   initial={{ opacity: 0, y: 50, scale: 0.9 }}
@@ -822,6 +854,79 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
               </motion.div>
           )}
         </AnimatePresence>
+        
+        <AnimatePresence>
+          {isChatOverlayOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.9 }}
+              transition={{ ease: "easeInOut", duration: 0.3 }}
+              className="absolute bottom-0 left-0 z-20 p-4 pointer-events-auto w-full md:w-96"
+            >
+              <div className="h-[40vh] bg-background/80 backdrop-blur-sm border border-border rounded-lg flex flex-col">
+                <div className="p-2 border-b flex justify-between items-center">
+                    <h3 className="font-semibold px-2">Live Chat</h3>
+                    <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(false)}>
+                        <X className="w-4 h-4" />
+                    </Button>
+                </div>
+                <ScrollArea className="flex-1">
+                    <ScrollAreaViewport ref={chatViewportRef} className="px-4 py-2">
+                         <div className="space-y-4 pb-4">
+                        {messages.map((message) => (
+                            <div key={message.id} className="flex items-start gap-3">
+                                <Avatar className="w-8 h-8 border">
+                                    <AvatarImage src={message.user.avatar} alt={message.user.name} />
+                                    <AvatarFallback>{message.user.name.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                    <p className="font-semibold text-sm text-foreground">{user?.id === message.user.id ? "You" : message.user.name}</p>
+                                    {message.type === 'gif' ? (
+                                        <div className="mt-1 bg-secondary rounded-lg overflow-hidden w-fit">
+                                            <Image 
+                                              src={message.gif!} 
+                                              alt="gif" 
+                                              width={150}
+                                              height={0}
+                                              style={{ height: 'auto', objectFit: 'contain' }}
+                                              unoptimized
+                                              className="max-w-[150px] h-auto"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm bg-secondary p-2 rounded-lg mt-1 w-fit max-w-full">
+                                            <p className="break-words text-secondary-foreground">{message.text}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    </ScrollAreaViewport>
+                </ScrollArea>
+                <div className="p-2 border-t">
+                    <form onSubmit={handleSendChatMessage} className="flex items-center gap-2">
+                         <Input
+                            value={chatMessage}
+                            onChange={(e) => setChatMessage(e.target.value)}
+                            placeholder="Type a message..."
+                            className="flex-1 bg-input"
+                            autoComplete="off"
+                        />
+                        <Button type="submit" size="icon" variant="accent">
+                            <Send className="w-4 h-4" />
+                        </Button>
+                    </form>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      </div>
     </div>
   );
 }
+
+    

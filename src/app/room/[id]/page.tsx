@@ -7,7 +7,7 @@ import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
 import { Clapperboard, MessageSquare, Play } from 'lucide-react';
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
@@ -324,6 +324,8 @@ export default function RoomPage() {
         <div className="flex-1 w-full h-full min-h-0 rounded-lg overflow-hidden">
           <VideoPlayer 
             roomId={roomId}
+            user={user}
+            messages={messages}
             lastMessage={lastMessage}
             showNotification={showNotification}
             onNotificationClick={handleNotificationClick}
@@ -338,3 +340,5 @@ export default function RoomPage() {
     </div>
   );
 }
+
+    
