@@ -933,9 +933,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           >
             <div className="h-[40vh] bg-background/80 backdrop-blur-sm border border-border rounded-lg flex flex-col">
               <div className="p-2 border-b flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold px-2">Live Chat</h3>
-                  </div>
+                  <h3 className="font-semibold px-2">Live Chat</h3>
                   <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(false)}>
                       <X className="w-4 h-4" />
                   </Button>
@@ -995,5 +993,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     </div>
   );
 }
+
 
 
