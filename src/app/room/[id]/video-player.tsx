@@ -655,7 +655,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-white">
-                 <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}>
+                <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}>
                   {roomState?.isPlaying ? <Pause /> : <Play />}
                 </Button>
                 <div className="flex items-center gap-2">
@@ -664,7 +664,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
                   </Button>
                   <Slider value={[isMuted ? 0 : volume]} max={1} step={0.05} onValueChange={handleVolumeChange} className="w-24" />
                 </div>
-                 <DropdownMenu open={isInfoOpen} onOpenChange={setIsInfoOpen}>
+                 <DropdownMenu modal={true} open={isInfoOpen} onOpenChange={setIsInfoOpen}>
                       <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><Info /></Button>
                       </DropdownMenuTrigger>
@@ -683,7 +683,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
                         </DropdownMenuContent>
                       </DropdownMenuPortal>
                   </DropdownMenu>
-                  <DropdownMenu open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+                  <DropdownMenu modal={true} open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                       <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><Settings /></Button>
                       </DropdownMenuTrigger>
@@ -929,6 +929,3 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   );
 }
 
-    
-
-    
