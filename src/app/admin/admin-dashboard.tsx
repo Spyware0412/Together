@@ -10,7 +10,6 @@ import { database } from "@/lib/firebase";
 import { ref, onValue } from "firebase/database";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 
 interface User {
     id: string;
@@ -33,23 +32,40 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const [rooms, setRooms] = useState<Room[]>([]);
 
     useEffect(() => {
-        const usersRef = ref(database, 'users');
         const roomsRef = ref(database, 'rooms');
 
-        const onUsers = onValue(usersRef, (snapshot) => {
-            const data = snapshot.val();
-            const userList = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
-            setUsers(userList);
-        });
+        const onData = onValue(roomsRef, (snapshot) => {
+            const allRoomsData = snapshot.val();
+            if (allRoomsData) {
+                const roomList = Object.keys(allRoomsData).map(key => ({ id: key, ...allRoomsData[key] }));
+                setRooms(roomList);
 
-        const onRooms = onValue(roomsRef, (snapshot) => {
-            const data = snapshot.val();
-            const roomList = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
-            setRooms(roomList);
+                const allUsersMap = new Map<string, User>();
+                
+                roomList.forEach(room => {
+                    if (room.users) {
+                        Object.values(room.users).forEach((user: any) => {
+                            if (user && user.id && !allUsersMap.has(user.id)) {
+                                allUsersMap.set(user.id, {
+                                    id: user.id,
+                                    name: user.name || 'Unknown',
+                                    email: user.email || 'No email',
+                                    avatar: user.avatar || '',
+                                });
+                            }
+                        });
+                    }
+                });
+                
+                setUsers(Array.from(allUsersMap.values()));
+            } else {
+                setRooms([]);
+                setUsers([]);
+            }
         });
 
         return () => {
-            // Detach listeners
+            // Detach listener
         };
     }, []);
 
@@ -73,7 +89,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         <CardHeader>
                             <CardTitle>All Users</CardTitle>
                             <CardDescription>
-                                A list of all registered users in the application.
+                                A list of all unique users who have joined any room.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -92,7 +108,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                             <TableCell>
                                                 <Avatar>
                                                     <AvatarImage src={user.avatar} />
-                                                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                                    <AvatarFallback>{user.name?.charAt(0) || '?'}</AvatarFallback>
                                                 </Avatar>
                                             </TableCell>
                                             <TableCell className="font-medium">{user.name}</TableCell>
