@@ -428,15 +428,15 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     setSubtitleSearchResults([]);
     try {
       const res = await fetch(`/api/subtitles?tmdb_id=${movie.id}`);
-      const subs: SubtitleSearchResult[] | {error: string} = await res.json();
+      const data: SubtitleSearchResult[] | {error: string} = await res.json();
       
-      if (res.ok && Array.isArray(subs)) {
-          setSubtitleSearchResults(subs);
-          if (subs.length === 0) {
+      if (res.ok && Array.isArray(data)) {
+          setSubtitleSearchResults(data);
+          if (data.length === 0) {
             toast({ variant: 'destructive', title: 'No Subtitles Found', description: `No subtitles found for ${movie.title}.` });
           }
       } else {
-          const error = Array.isArray(subs) ? {error: 'Unknown error'} : subs;
+          const error = Array.isArray(data) ? {error: 'Unknown error'} : data;
           toast({ variant: 'destructive', title: 'Error Searching Subtitles', description: error.error });
       }
     } catch (err) {
@@ -447,10 +447,25 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     }
   }
 
-  const loadOnlineSubtitle = (subtitle: SubtitleSearchResult) => {
-    addTrackToVideo(subtitle.url, subtitle.fileName, subtitle.language, false);
-    resetSearch();
-    toast({ title: 'Subtitle Loaded', description: `${subtitle.fileName} has been added.`});
+  const loadOnlineSubtitle = async (subtitle: SubtitleSearchResult) => {
+      try {
+        const response = await fetch(subtitle.url);
+        if (!response.ok) {
+            throw new Error(`Failed to download subtitle: ${response.statusText}`);
+        }
+        const srtText = await response.text();
+        const vttText = srtToVtt(srtText);
+        const blob = new Blob([vttText], { type: 'text/vtt' });
+        const trackUrl = URL.createObjectURL(blob);
+        
+        addTrackToVideo(trackUrl, subtitle.fileName, subtitle.language, true);
+
+        resetSearch();
+        toast({ title: 'Subtitle Loaded', description: `${subtitle.fileName} has been added.`});
+    } catch (error: any) {
+        console.error("Error loading online subtitle:", error);
+        toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to load subtitle.' });
+    }
   }
 
   const resetSearch = () => {
@@ -979,4 +994,3 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   );
 }
 
-    
