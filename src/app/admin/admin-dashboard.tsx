@@ -7,9 +7,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { database } from "@/lib/firebase";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, remove, get } from "firebase/database";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface User {
     id: string;
@@ -30,6 +42,7 @@ interface AdminDashboardProps {
 export function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const [users, setUsers] = useState<User[]>([]);
     const [rooms, setRooms] = useState<Room[]>([]);
+    const { toast } = useToast();
 
     useEffect(() => {
         const roomsRef = ref(database, 'rooms');
@@ -68,6 +81,50 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
             // Detach listener
         };
     }, []);
+
+    const handleDeleteRoom = async (roomId: string) => {
+        try {
+            await remove(ref(database, `rooms/${roomId}`));
+            toast({
+                title: "Room Deleted",
+                description: `Room ${roomId} has been successfully deleted.`,
+            });
+        } catch (error) {
+            console.error("Error deleting room:", error);
+            toast({
+                variant: "destructive",
+                title: "Deletion Failed",
+                description: "Could not delete the room. Please try again.",
+            });
+        }
+    };
+
+    const handleDeleteUser = async (userId: string) => {
+        try {
+            const roomsSnapshot = await get(ref(database, 'rooms'));
+            const allRoomsData = roomsSnapshot.val();
+
+            if (allRoomsData) {
+                const deletionPromises: Promise<void>[] = [];
+                Object.keys(allRoomsData).forEach(roomId => {
+                    const userInRoomRef = ref(database, `rooms/${roomId}/users/${userId}`);
+                    deletionPromises.push(remove(userInRoomRef));
+                });
+                await Promise.all(deletionPromises);
+            }
+            toast({
+                title: "User Deleted",
+                description: `User ${userId} has been removed from all rooms.`,
+            });
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            toast({
+                variant: "destructive",
+                title: "Deletion Failed",
+                description: "Could not delete the user. Please try again.",
+            });
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -114,7 +171,25 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                             <TableCell className="font-medium">{user.name}</TableCell>
                                             <TableCell>{user.email}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="destructive" size="sm" disabled>Delete</Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="destructive" size="sm">Delete</Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                This will permanently delete the user from all rooms. This action cannot be undone.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteUser(user.id)}>
+                                                                Delete
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
                                             </TableCell>
                                         </TableRow>
                                     )) : (
@@ -148,7 +223,25 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                         <TableRow key={room.id}>
                                             <TableCell className="font-mono">{room.id}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="destructive" size="sm" disabled>Delete</Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                         <Button variant="destructive" size="sm">Delete</Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                This will permanently delete the room and all its data. This action cannot be undone.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteRoom(room.id)}>
+                                                                Delete
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
                                             </TableCell>
                                         </TableRow>
                                      )) : (
