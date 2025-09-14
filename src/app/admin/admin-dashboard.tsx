@@ -48,31 +48,59 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
         const usersRef = ref(database, 'users');
         const roomsRef = ref(database, 'rooms');
 
-        const onUsersValue = onValue(usersRef, (snapshot) => {
-            const usersData = snapshot.val();
-            if (usersData) {
-                const userList = Object.keys(usersData).map(key => ({ ...usersData[key], id: key }));
-                setUsers(userList);
-            } else {
-                setUsers([]);
-            }
-        });
+        // Combined logic to get users from both /users and /rooms/{id}/users
+        const onData = (usersSnapshot: any, roomsSnapshot: any) => {
+            const allUsersMap = new Map<string, User>();
 
-        const onRoomsValue = onValue(roomsRef, (snapshot) => {
-            const roomsData = snapshot.val();
+            // 1. Get users from global /users list
+            const globalUsersData = usersSnapshot.val();
+            if (globalUsersData) {
+                Object.keys(globalUsersData).forEach(key => {
+                    if(!allUsersMap.has(key)) {
+                        allUsersMap.set(key, { ...globalUsersData[key], id: key });
+                    }
+                });
+            }
+
+            // 2. Get users from within each room
+            const roomsData = roomsSnapshot.val();
             if (roomsData) {
-                const roomList = Object.keys(roomsData).map(key => ({ id: key, ...roomsData[key] }));
-                setRooms(roomList);
+                 const roomList = Object.keys(roomsData).map(key => ({ id: key, ...roomsData[key] }));
+                 setRooms(roomList);
+
+                 Object.values(roomsData).forEach((room: any) => {
+                     if (room.users) {
+                         Object.keys(room.users).forEach(userId => {
+                             if (!allUsersMap.has(userId)) {
+                                 const user = room.users[userId];
+                                 allUsersMap.set(userId, { ...user, id: userId });
+                             }
+                         });
+                     }
+                 });
             } else {
                 setRooms([]);
             }
+
+            setUsers(Array.from(allUsersMap.values()));
+        };
+        
+        let usersSnapshot: any, roomsSnapshot: any;
+
+        const usersListener = onValue(usersRef, (snapshot) => {
+            usersSnapshot = snapshot;
+            if(roomsSnapshot !== undefined) onData(usersSnapshot, roomsSnapshot);
         });
 
-        // In a real app with many rooms/users, you'd probably want to structure this
-        // differently to avoid detaching all listeners, but for this app it's fine.
+        const roomsListener = onValue(roomsRef, (snapshot) => {
+            roomsSnapshot = snapshot;
+            if(usersSnapshot !== undefined) onData(usersSnapshot, roomsSnapshot);
+        });
+
         return () => {
-            onValue(usersRef, () => {});
-            onValue(roomsRef, () => {});
+            // Detach listeners using the returned unsubscribe functions
+            usersListener();
+            roomsListener();
         };
     }, []);
 
