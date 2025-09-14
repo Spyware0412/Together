@@ -68,8 +68,11 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
             }
         });
 
+        // In a real app with many rooms/users, you'd probably want to structure this
+        // differently to avoid detaching all listeners, but for this app it's fine.
         return () => {
-            // Detach listeners
+            onValue(usersRef, () => {});
+            onValue(roomsRef, () => {});
         };
     }, []);
 
@@ -92,10 +95,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
     const handleDeleteUser = async (userId: string) => {
         try {
-            // Remove the user from the global users list
-            await remove(ref(database, `users/${userId}`));
-            
-            // Also remove the user from all rooms they might be in
+            // First, remove the user from any rooms they are in
             const roomsSnapshot = await get(ref(database, 'rooms'));
             const allRoomsData = roomsSnapshot.val();
 
@@ -107,9 +107,13 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 });
                 await Promise.all(deletionPromises);
             }
+            
+            // Finally, remove the user from the global users list
+            await remove(ref(database, `users/${userId}`));
+            
             toast({
                 title: "User Deleted",
-                description: `User has been permanently deleted.`,
+                description: `User has been permanently deleted from all records.`,
             });
         } catch (error) {
             console.error("Error deleting user:", error);
@@ -176,7 +180,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                                         <AlertDialogHeader>
                                                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                             <AlertDialogDescription>
-                                                                This will permanently delete the user and all their associated data. This action cannot be undone.
+                                                                This will permanently delete the user and all their associated data from all rooms. This action cannot be undone.
                                                             </AlertDialogDescription>
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
@@ -255,3 +259,5 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
         </div>
     );
 }
+
+    
