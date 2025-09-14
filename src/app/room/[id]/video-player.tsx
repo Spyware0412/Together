@@ -193,7 +193,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
       
-      // If a public URL is available, use it.
       if (data?.videoUrl) {
           if (localVideoUrlRef.current) {
               URL.revokeObjectURL(localVideoUrlRef.current);
@@ -203,17 +202,14 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
               setVideoSrc(data.videoUrl);
           }
           setLocalFileName(data.fileName ?? "Video from URL");
-      }
-      // If only a fileName is available, it's a local file.
-      else if (data?.fileName) {
-          // If we had a URL source before, clear it.
+      } else if (data?.fileName) {
+          // This is a local file. Don't change videoSrc if it's already set to a local object URL.
+          // This prevents the video from disappearing when another user joins.
           if (videoSrc && !localVideoUrlRef.current) {
               setVideoSrc(null);
           }
           setLocalFileName(data.fileName);
-      }
-      // If no video info is present, reset everything.
-      else {
+      } else {
           if (localVideoUrlRef.current) {
               URL.revokeObjectURL(localVideoUrlRef.current);
               localVideoUrlRef.current = null;
@@ -221,7 +217,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
           setVideoSrc(null);
           setLocalFileName(null);
       }
-
 
       if (videoRef.current && data) {
         const serverTime = data.progress ?? 0;
@@ -252,7 +247,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       }
       if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
     };
-  }, [roomId, videoSrc]);
+  }, [roomId]);
 
   const syncState = useCallback((state: Partial<RoomState>) => {
       if (isRemoteUpdate.current) return;
@@ -539,7 +534,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       video.removeEventListener("loadedmetadata", onDurationChange);
       video.removeEventListener("loadeddata", loadTracks);
     };
-  }, [videoSrc, syncState, loadTracks]);
+  }, [syncState, loadTracks]);
 
   const handleMouseMove = () => {
     setShowControls(true);
@@ -606,7 +601,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
         </div>
       )}
 
-      
       <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-300 z-10", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0", "pointer-events-auto")}>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
