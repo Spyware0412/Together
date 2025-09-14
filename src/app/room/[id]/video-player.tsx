@@ -209,18 +209,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
         }
     };
 
-
-  useEffect(() => {
-    const player = playerRef.current;
-    if (player) {
-      if (isSettingsOpen || isInfoOpen) {
-        player.setAttribute('inert', 'true');
-      } else {
-        player.removeAttribute('inert');
-      }
-    }
-  }, [isSettingsOpen, isInfoOpen]);
-
   useEffect(() => {
     let userStatusRef: any;
     const storedUser = localStorage.getItem('cinesync_user');
@@ -535,14 +523,14 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     const sheet = styleElement.sheet;
     if (sheet) {
         if (sheet.cssRules.length > 0) sheet.deleteRule(0);
-        sheet.insertRule(`
+        sheet.insertRule(\`
         ::cue {
-          font-size: ${subtitleSettings.fontSize}rem !important;
-          color: ${subtitleSettings.color} !important;
+          font-size: \${subtitleSettings.fontSize}rem !important;
+          color: \${subtitleSettings.color} !important;
           background-color: rgba(0, 0, 0, 0.7) !important;
-          bottom: ${subtitleSettings.position}% !important;
+          bottom: \${subtitleSettings.position}% !important;
         }
-      `, 0);
+      \`, 0);
     }
   }, [subtitleSettings]);
 
@@ -592,7 +580,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     if (isNaN(time)) return "0:00";
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    return \`\${minutes}:\${seconds.toString().padStart(2, "0")}\`;
   };
 
   if (isLoading) {
@@ -629,304 +617,307 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
       <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" preload="metadata" />
       <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       
-      <div className={cn("absolute inset-0 z-50 pointer-events-none", showControls || !roomState?.isPlaying || isChatOverlayOpen ? "opacity-100" : "opacity-0")}>
-        {isPlaybackDisabled && (
-          <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 pointer-events-auto">
-            <Alert className="max-w-md">
-              <Info className="h-4 w-4" />
-              <AlertTitle>Your friends are watching!</AlertTitle>
-              <AlertDescription>
-                They are watching <span className="font-bold">{roomState?.fileName}</span>. Select your file to sync and join in.
-              </AlertDescription>
-              <div className="mt-4">
-                <Button asChild variant="secondary"><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Video File</label></Button>
-                <input id="video-upload-mismatch" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
-              </div>
-            </Alert>
-          </div>
-        )}
-
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 pointer-events-auto">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-white">{formatTime(progress)}</span>
-              <Slider value={[progress]} max={duration} step={1} onValueChange={handleProgressChange} onValueCommit={handleProgressChangeCommit} className="flex-1" disabled={isPlaybackDisabled} />
-              <span className="text-xs font-mono text-white">{formatTime(duration)}</span>
+      {isPlaybackDisabled && (
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
+          <Alert className="max-w-md">
+            <Info className="h-4 w-4" />
+            <AlertTitle>Your friends are watching!</AlertTitle>
+            <AlertDescription>
+              They are watching <span className="font-bold">{roomState?.fileName}</span>. Select your file to sync and join in.
+            </AlertDescription>
+            <div className="mt-4">
+              <Button asChild variant="secondary"><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Video File</label></Button>
+              <input id="video-upload-mismatch" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white">
-                <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}>
-                  {roomState?.isPlaying ? <Pause /> : <Play />}
-                </Button>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white hover:bg-white/10" >
-                      {isMuted || volume === 0 ? <VolumeX /> : <Volume2 />}
-                  </Button>
-                  <Slider value={[isMuted ? 0 : volume]} max={1} step={0.05} onValueChange={handleVolumeChange} className="w-24" />
+          </Alert>
+        </div>
+      )}
+
+      {/* Independent Controls in Top Right */}
+      <div className={cn(
+        "absolute top-0 right-0 z-20 p-2 flex items-center gap-2 transition-opacity duration-300",
+        showControls || !roomState?.isPlaying || isSettingsOpen || isInfoOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+      )}>
+        <DropdownMenu onOpenChange={setIsInfoOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><Info /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-96" align="end">
+            <div className="grid gap-3 p-2">
+                <h4 className="font-medium leading-none">Video Info</h4>
+                <div className="text-sm space-y-2">
+                    <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? 'N/A'}</span></p>
+                    <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
+                    <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
+                    <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
+                    <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
                 </div>
-                 <DropdownMenu modal={true} open={isInfoOpen} onOpenChange={setIsInfoOpen}>
-                      <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><Info /></Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuPortal container={playerRef.current}>
-                        <DropdownMenuContent className="w-96" align="end">
-                            <div className="grid gap-3 p-2">
-                                <h4 className="font-medium leading-none">Video Info</h4>
-                                <div className="text-sm space-y-2">
-                                    <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? 'N/A'}</span></p>
-                                    <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
-                                    <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
-                                    <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
-                                    <p><span className="font-semibold">Subtitles:</span> <span className="text-muted-foreground">{textTracks.length}</span></p>
-                                </div>
-                            </div>
-                        </DropdownMenuContent>
-                      </DropdownMenuPortal>
-                  </DropdownMenu>
-                  <DropdownMenu modal={true} open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-                      <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><Settings /></Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuPortal container={playerRef.current}>
-                        <DropdownMenuContent className="w-96" align="end">
-                            <div className="grid gap-4 p-2">
-                                <div className="grid gap-2">
-                                    <Label className="font-medium leading-none">Subtitles</Label>
-                                    <Select onValueChange={setSelectedTextTrack} value={selectedTextTrack}>
-                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select subtitle" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="off">Off</SelectItem>
-                                            {textTracks.map((track, i) => (
-                                                <SelectItem key={track.id || `track-${i}`} value={track.label || `track-${i}`}>{track.label} ({track.language})</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <div className="flex items-center gap-2 pt-1">
-                                        <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload File</label></Button>
-                                        <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu onOpenChange={setIsSettingsOpen}>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><Settings /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-96" align="end">
+                <div className="grid gap-4 p-2">
+                    <div className="grid gap-2">
+                        <Label className="font-medium leading-none">Subtitles</Label>
+                        <Select onValueChange={setSelectedTextTrack} value={selectedTextTrack}>
+                            <SelectTrigger className="w-full"><SelectValue placeholder="Select subtitle" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="off">Off</SelectItem>
+                                {textTracks.map((track, i) => (
+                                    <SelectItem key={track.id || \`track-\${i}\`} value={track.label || \`track-\${i}\`}>{track.label} ({track.language})</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2 pt-1">
+                            <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload File</label></Button>
+                            <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
+                        </div>
+                    </div>
+                    <Separator/>
+                    <div className="grid gap-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-medium leading-none">Search Subtitles Online</Label>
+                          {searchStep === 'subtitle' && (
+                            <Button variant="ghost" size="sm" onClick={resetSearch} className="flex items-center gap-1 text-xs h-auto p-1">
+                              <ArrowLeft className="w-3 h-3" /> Back
+                            </Button>
+                          )}
+                        </div>
+                        
+                        {searchStep === 'movie' && (
+                          <form onSubmit={handleMovieSearch} className="flex gap-2">
+                              <Input 
+                                  placeholder={localFileName || 'e.g., Inception'}
+                                  value={searchQuery}
+                                  onChange={(e) => setSearchQuery(e.target.value)}
+                                  className="bg-input"
+                              />
+                              <Button type="submit" size="icon" disabled={isSearching}>
+                                  {isSearching ? <LoadingAnimation width="24px" height="24px" /> : <Search className="w-4 h-4" />}
+                              </Button>
+                          </form>
+                        )}
+
+                        {isSearching && <div className="flex justify-center p-4"><LoadingAnimation width="60px" height="60px"/></div>}
+
+                        {!isSearching && movieSearchResults.length > 0 && searchStep === 'movie' && (
+                            <ScrollArea className="h-60 mt-2 border rounded-md">
+                                <div className="p-2 space-y-2">
+                                {movieSearchResults.map((movie) => (
+                                  <div
+                                    key={movie.id}
+                                    className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
+                                    onClick={() => handleSubtitleSearch(movie)}
+                                  >
+                                    <div className="w-12 flex-shrink-0">
+                                      <Image
+                                          src={movie.poster_path ? \`https://image.tmdb.org/t/p/w92\${movie.poster_path}\` : 'https://picsum.photos/seed/1/92/138'}
+                                          width={48}
+                                          height={72}
+                                          alt={\`Poster for \${movie.title}\`}
+                                          className="rounded"
+                                          unoptimized
+                                      />
                                     </div>
-                                </div>
-                                <Separator/>
-                                <div className="grid gap-2">
-                                    <div className="flex items-center justify-between">
-                                      <Label className="font-medium leading-none">Search Subtitles Online</Label>
-                                      {searchStep === 'subtitle' && (
-                                        <Button variant="ghost" size="sm" onClick={resetSearch} className="flex items-center gap-1 text-xs h-auto p-1">
-                                          <ArrowLeft className="w-3 h-3" /> Back
-                                        </Button>
-                                      )}
+                                    <div className="flex-1">
+                                        <p className="font-semibold text-sm">{movie.title}</p>
+                                        <p className="text-xs text-muted-foreground">{movie.release_date.split('-')[0]}</p>
                                     </div>
-                                    
-                                    {searchStep === 'movie' && (
-                                      <form onSubmit={handleMovieSearch} className="flex gap-2">
-                                          <Input 
-                                              placeholder={localFileName || 'e.g., Inception'}
-                                              value={searchQuery}
-                                              onChange={(e) => setSearchQuery(e.target.value)}
-                                              className="bg-input"
-                                          />
-                                          <Button type="submit" size="icon" disabled={isSearching}>
-                                              {isSearching ? <LoadingAnimation width="24px" height="24px" /> : <Search className="w-4 h-4" />}
-                                          </Button>
-                                      </form>
-                                    )}
-
-                                    {isSearching && <div className="flex justify-center p-4"><LoadingAnimation width="60px" height="60px"/></div>}
-
-                                    {!isSearching && movieSearchResults.length > 0 && searchStep === 'movie' && (
-                                        <ScrollArea className="h-60 mt-2 border rounded-md">
-                                            <div className="p-2 space-y-2">
-                                            {movieSearchResults.map((movie) => (
-                                              <div
-                                                key={movie.id}
-                                                className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
-                                                onClick={() => handleSubtitleSearch(movie)}
-                                              >
-                                                <div className="w-12 flex-shrink-0">
-                                                  <Image
-                                                      src={movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : 'https://picsum.photos/seed/1/92/138'}
-                                                      width={48}
-                                                      height={72}
-                                                      alt={`Poster for ${movie.title}`}
-                                                      className="rounded"
-                                                      unoptimized
-                                                  />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-semibold text-sm">{movie.title}</p>
-                                                    <p className="text-xs text-muted-foreground">{movie.release_date.split('-')[0]}</p>
-                                                </div>
-                                              </div>
-                                            ))}
-                                            </div>
-                                        </ScrollArea>
-                                    )}
-                                    
-                                    {!isSearching && subtitleSearchResults.length > 0 && searchStep === 'subtitle' && (
-                                        <ScrollArea className="h-60 mt-2 border rounded-md">
-                                            <div className="p-2 space-y-2">
-                                              <div className="font-semibold text-sm p-2">Results for {selectedMovie?.title}</div>
-                                              {subtitleSearchResults.map((sub, i) => (
-                                                <div
-                                                    key={i}
-                                                    className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
-                                                    onClick={() => loadOnlineSubtitle(sub)}
-                                                >
-                                                    <div className="flex-1 truncate">
-                                                        <Badge variant="outline">{sub.language}</Badge>
-                                                        <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
-                                                    </div>
-                                                    <Download className="w-4 h-4"/>
-                                                </div>
-                                              ))}
-                                            </div>
-                                        </ScrollArea>
-                                    )}
-
+                                  </div>
+                                ))}
                                 </div>
-
-                                {selectedTextTrack !== "off" && (
-                                  <>
-                                    <Separator />
-                                    <div className="grid gap-4">
-                                      <Label className="font-medium leading-none">Subtitle Style</Label>
-                                      <div className="grid grid-cols-2 items-center gap-4">
-                                        <Label htmlFor="font-size">Font Size</Label>
-                                        <Slider id="font-size" value={[subtitleSettings.fontSize]} min={0.5} max={2.5} step={0.1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, fontSize: val }))} />
-                                      </div>
-                                      <div className="grid grid-cols-2 items-center gap-4">
-                                        <Label htmlFor="font-color">Font Color</Label>
-                                        <Input id="font-color" type="color" value={subtitleSettings.color} onChange={(e) => setSubtitleSettings(s => ({ ...s, color: e.target.value }))} className="p-1 h-8" />
-                                      </div>
-                                      <div className="grid grid-cols-2 items-center gap-4">
-                                        <Label htmlFor="position">Position</Label>
-                                        <Slider id="position" value={[subtitleSettings.position]} min={0} max={80} step={1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, position: val }))} />
-                                      </div>
+                            </ScrollArea>
+                        )}
+                        
+                        {!isSearching && subtitleSearchResults.length > 0 && searchStep === 'subtitle' && (
+                            <ScrollArea className="h-60 mt-2 border rounded-md">
+                                <div className="p-2 space-y-2">
+                                  <div className="font-semibold text-sm p-2">Results for {selectedMovie?.title}</div>
+                                  {subtitleSearchResults.map((sub, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
+                                        onClick={() => loadOnlineSubtitle(sub)}
+                                    >
+                                        <div className="flex-1 truncate">
+                                            <Badge variant="outline">{sub.language}</Badge>
+                                            <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
+                                        </div>
+                                        <Download className="w-4 h-4"/>
                                     </div>
-                                  </>
-                                )}
-                            </div>
-                        </DropdownMenuContent>
-                      </DropdownMenuPortal>
-                  </DropdownMenu>
+                                  ))}
+                                </div>
+                            </ScrollArea>
+                        )}
+
+                    </div>
+
+                    {selectedTextTrack !== "off" && (
+                      <>
+                        <Separator />
+                        <div className="grid gap-4">
+                          <Label className="font-medium leading-none">Subtitle Style</Label>
+                          <div className="grid grid-cols-2 items-center gap-4">
+                            <Label htmlFor="font-size">Font Size</Label>
+                            <Slider id="font-size" value={[subtitleSettings.fontSize]} min={0.5} max={2.5} step={0.1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, fontSize: val }))} />
+                          </div>
+                          <div className="grid grid-cols-2 items-center gap-4">
+                            <Label htmlFor="font-color">Font Color</Label>
+                            <Input id="font-color" type="color" value={subtitleSettings.color} onChange={(e) => setSubtitleSettings(s => ({ ...s, color: e.target.value }))} className="p-1 h-8" />
+                          </div>
+                          <div className="grid grid-cols-2 items-center gap-4">
+                            <Label htmlFor="position">Position</Label>
+                            <Slider id="position" value={[subtitleSettings.position]} min={0} max={80} step={1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, position: val }))} />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                </div>
+            </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Main Controls Bar */}
+      <div className={cn(
+          "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300",
+          showControls || !roomState?.isPlaying || isChatOverlayOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+      )}>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-white">{formatTime(progress)}</span>
+            <Slider value={[progress]} max={duration} step={1} onValueChange={handleProgressChange} onValueCommit={handleProgressChangeCommit} className="flex-1" disabled={isPlaybackDisabled} />
+            <span className="text-xs font-mono text-white">{formatTime(duration)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-white">
+              <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}>
+                {roomState?.isPlaying ? <Pause /> : <Play />}
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white hover:bg-white/10" >
+                    {isMuted || volume === 0 ? <VolumeX /> : <Volume2 />}
+                </Button>
+                <Slider value={[isMuted ? 0 : volume]} max={1} step={0.05} onValueChange={handleVolumeChange} className="w-24" />
               </div>
+            </div>
 
-              <div className="flex items-center gap-1 text-white">
-                <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(v => !v)} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><MessageSquare /></Button>
-                <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/10"><Maximize /></Button>
-              </div>
+            <div className="flex items-center gap-1 text-white">
+              <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(v => !v)} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><MessageSquare /></Button>
+              <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/10"><Maximize /></Button>
             </div>
           </div>
         </div>
-
-        <AnimatePresence>
-          {showNotification && lastMessage && (
-              <motion.div
-                  initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                  transition={{ ease: "easeInOut", duration: 0.3 }}
-                  className="absolute bottom-24 right-5 z-20 pointer-events-auto"
-              >
-                  <div 
-                      className="p-3 rounded-lg bg-popover/80 backdrop-blur-sm border border-border shadow-2xl cursor-pointer w-80"
-                      onClick={onNotificationClick}
-                  >
-                      <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm font-semibold">New Message</p>
-                          <Button variant="ghost" size="icon" className="w-6 h-6" onClick={onCloseNotification}>
-                              <X className="w-4 h-4"/>
-                          </Button>
-                      </div>
-                      <div className="flex items-start gap-3">
-                          <Avatar className="w-8 h-8 border">
-                              <AvatarImage src={lastMessage.user.avatar} alt={lastMessage.user.name} />
-                              <AvatarFallback>{lastMessage.user.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                              <p className="font-semibold text-sm">{lastMessage.user.name}</p>
-                              <p className="text-sm text-muted-foreground truncate">
-                                  {lastMessage.type === 'gif' ? 'Sent a GIF' : lastMessage.text}
-                              </p>
-                          </div>
-                      </div>
-                  </div>
-              </motion.div>
-          )}
-        </AnimatePresence>
-        
-        <AnimatePresence>
-          {isChatOverlayOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.9 }}
-              transition={{ ease: "easeInOut", duration: 0.3 }}
-              className="absolute bottom-0 left-0 z-20 p-4 pointer-events-auto w-full md:w-96"
-            >
-              <div className="h-[40vh] bg-background/80 backdrop-blur-sm border border-border rounded-lg flex flex-col">
-                <div className="p-2 border-b flex justify-between items-center">
-                    <h3 className="font-semibold px-2">Live Chat</h3>
-                    <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(false)}>
-                        <X className="w-4 h-4" />
-                    </Button>
-                </div>
-                <ScrollArea className="flex-1">
-                    <ScrollAreaViewport ref={chatViewportRef} className="px-4 py-2">
-                         <div className="space-y-4 pb-4">
-                        {messages.map((message) => (
-                            <div key={message.id} className="flex items-start gap-3">
-                                <Avatar className="w-8 h-8 border">
-                                    <AvatarImage src={message.user.avatar} alt={message.user.name} />
-                                    <AvatarFallback>{message.user.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1">
-                                    <p className="font-semibold text-sm text-foreground">{user?.id === message.user.id ? "You" : message.user.name}</p>
-                                    {message.type === 'gif' ? (
-                                        <div className="mt-1 bg-secondary rounded-lg overflow-hidden w-fit">
-                                            <Image 
-                                              src={message.gif!} 
-                                              alt="gif" 
-                                              width={150}
-                                              height={0}
-                                              style={{ height: 'auto', objectFit: 'contain' }}
-                                              unoptimized
-                                              className="max-w-[150px] h-auto"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div className="text-sm bg-secondary p-2 rounded-lg mt-1 w-fit max-w-full">
-                                            <p className="break-words text-secondary-foreground">{message.text}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    </ScrollAreaViewport>
-                </ScrollArea>
-                <div className="p-2 border-t">
-                    <form onSubmit={handleSendChatMessage} className="flex items-center gap-2">
-                         <Input
-                            value={chatMessage}
-                            onChange={(e) => setChatMessage(e.target.value)}
-                            placeholder="Type a message..."
-                            className="flex-1 bg-input"
-                            autoComplete="off"
-                        />
-                        <Button type="submit" size="icon" variant="accent">
-                            <Send className="w-4 h-4" />
-                        </Button>
-                    </form>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
       </div>
+
+      <AnimatePresence>
+        {showNotification && lastMessage && (
+            <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                transition={{ ease: "easeInOut", duration: 0.3 }}
+                className="absolute bottom-24 right-5 z-30"
+            >
+                <div 
+                    className="p-3 rounded-lg bg-popover/80 backdrop-blur-sm border border-border shadow-2xl cursor-pointer w-80"
+                    onClick={onNotificationClick}
+                >
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold">New Message</p>
+                        <Button variant="ghost" size="icon" className="w-6 h-6" onClick={onCloseNotification}>
+                            <X className="w-4 h-4"/>
+                        </Button>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <Avatar className="w-8 h-8 border">
+                            <AvatarImage src={lastMessage.user.avatar} alt={lastMessage.user.name} />
+                            <AvatarFallback>{lastMessage.user.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                            <p className="font-semibold text-sm">{lastMessage.user.name}</p>
+                            <p className="text-sm text-muted-foreground truncate">
+                                {lastMessage.type === 'gif' ? 'Sent a GIF' : lastMessage.text}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </motion.div>
+        )}
+      </AnimatePresence>
+      
+      <AnimatePresence>
+        {isChatOverlayOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            transition={{ ease: "easeInOut", duration: 0.3 }}
+            className="absolute bottom-0 left-0 z-20 p-4 w-full md:w-96"
+          >
+            <div className="h-[40vh] bg-background/80 backdrop-blur-sm border border-border rounded-lg flex flex-col">
+              <div className="p-2 border-b flex justify-between items-center">
+                  <h3 className="font-semibold px-2">Live Chat</h3>
+                  <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(false)}>
+                      <X className="w-4 h-4" />
+                  </Button>
+              </div>
+              <ScrollArea className="flex-1">
+                  <ScrollAreaViewport ref={chatViewportRef} className="px-4 py-2">
+                       <div className="space-y-4 pb-4">
+                      {messages.map((message) => (
+                          <div key={message.id} className="flex items-start gap-3">
+                              <Avatar className="w-8 h-8 border">
+                                  <AvatarImage src={message.user.avatar} alt={message.user.name} />
+                                  <AvatarFallback>{message.user.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                  <p className="font-semibold text-sm text-foreground">{user?.id === message.user.id ? "You" : message.user.name}</p>
+                                  {message.type === 'gif' ? (
+                                      <div className="mt-1 bg-secondary rounded-lg overflow-hidden w-fit">
+                                          <Image 
+                                            src={message.gif!} 
+                                            alt="gif" 
+                                            width={150}
+                                            height={0}
+                                            style={{ height: 'auto', objectFit: 'contain' }}
+                                            unoptimized
+                                            className="max-w-[150px] h-auto"
+                                          />
+                                      </div>
+                                  ) : (
+                                      <div className="text-sm bg-secondary p-2 rounded-lg mt-1 w-fit max-w-full">
+                                          <p className="break-words text-secondary-foreground">{message.text}</p>
+                                      </div>
+                                  )}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+                  </ScrollAreaViewport>
+              </ScrollArea>
+              <div className="p-2 border-t">
+                  <form onSubmit={handleSendChatMessage} className="flex items-center gap-2">
+                       <Input
+                          value={chatMessage}
+                          onChange={(e) => setChatMessage(e.target.value)}
+                          placeholder="Type a message..."
+                          className="flex-1 bg-input"
+                          autoComplete="off"
+                      />
+                      <Button type="submit" size="icon" variant="accent">
+                          <Send className="w-4 h-4" />
+                      </Button>
+                  </form>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-
-    
