@@ -6,10 +6,10 @@ import { DotLottiePlayer } from '@dotlottie/react-player';
 export const LoadingAnimation = () => {
   return (
     <DotLottiePlayer
-        src="https://lottie.host/24d83089-1b91-49af-8671-cea5e4277732/z5JGo2aV5I.lottie"
+        src="https://assets4.lottiefiles.com/packages/lf20_x62chJ.json"
         autoplay
         loop
-        style={{ width: '200px', height: '200px' }}
+        style={{ width: '300px', height: '300px' }}
     />
   );
 };
