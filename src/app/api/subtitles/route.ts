@@ -55,7 +55,13 @@ export async function GET(req: Request) {
 
     // 1. Get movie details from TMDB to find the imdb_id
     const tmdbRes = await fetch(
-      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`
+      `https://api.themoviedb.org/3/movie/${tmdbId}`,
+       {
+        headers: {
+            'Authorization': `Bearer ${TMDB_API_KEY}`,
+            'Accept': 'application/json'
+        }
+      }
     );
 
     if (!tmdbRes.ok) {
@@ -93,4 +99,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message || "An internal error occurred." }, { status: 500 });
   }
 }
-
