@@ -55,6 +55,7 @@ import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LoadingAnimation } from "@/components/loading-animation";
 
 interface Message {
     id: string;
@@ -554,7 +555,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   if (isLoading) {
     return (
       <div className="w-full h-full bg-background flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
-        <Loader2 className="w-16 h-16 text-primary animate-spin" />
+        <LoadingAnimation />
         <h2 className="text-2xl font-bold">Loading Room...</h2>
         <p className="text-muted-foreground max-w-sm">Getting things ready for your watch party.</p>
       </div>
@@ -808,5 +809,3 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
     </div>
   );
 }
-
-    
