@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -64,7 +62,9 @@ interface Message {
         name: string;
         avatar: string;
     };
-    text: string;
+    text?: string;
+    gif?: string;
+    type: 'text' | 'gif';
 }
 
 interface VideoPlayerProps {
@@ -192,34 +192,29 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       isRemoteUpdate.current = true;
       setRoomState(data);
       
-      // Main logic to handle video source synchronization
       if (data?.videoUrl) {
-        // A public URL is being played. Everyone should sync to this.
-        if (localVideoUrlRef.current) {
-            URL.revokeObjectURL(localVideoUrlRef.current);
-            localVideoUrlRef.current = null;
-        }
-        if (videoSrc !== data.videoUrl) {
-            setVideoSrc(data.videoUrl);
-        }
-        setLocalFileName(data.fileName); // Store filename for display
+          if (localVideoUrlRef.current) {
+              URL.revokeObjectURL(localVideoUrlRef.current);
+              localVideoUrlRef.current = null;
+          }
+          if (videoSrc !== data.videoUrl) {
+              setVideoSrc(data.videoUrl);
+          }
+          setLocalFileName(data.fileName ?? "Video from URL");
       } else if (data?.fileName) {
-        // A local file is being played.
-        if (videoSrc && !localVideoUrlRef.current) {
-            // A remote user switched from a URL to a local file.
-            // Clear our public URL src so we can be prompted to select the file.
-            setVideoSrc(null);
-        }
-        setLocalFileName(data.fileName);
+          if (videoSrc && !localVideoUrlRef.current) {
+              setVideoSrc(null);
+          }
+          setLocalFileName(data.fileName);
       } else {
-        // No video is set in the room. Reset everything.
-        if (localVideoUrlRef.current) {
-            URL.revokeObjectURL(localVideoUrlRef.current);
-            localVideoUrlRef.current = null;
-        }
-        setVideoSrc(null);
-        setLocalFileName(null);
+          if (localVideoUrlRef.current) {
+              URL.revokeObjectURL(localVideoUrlRef.current);
+              localVideoUrlRef.current = null;
+          }
+          setVideoSrc(null);
+          setLocalFileName(null);
       }
+
 
       if (videoRef.current && data) {
         const serverTime = data.progress ?? 0;
@@ -565,8 +560,11 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   }
   
   const hasVideoSource = !!videoSrc;
+  const isPlaybackDisabled = roomState?.fileName && !roomState.videoUrl && !localVideoUrlRef.current;
 
-  if (!hasVideoSource && !roomState?.fileName && !roomState?.videoUrl) {
+  if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
+
+  if (!hasVideoSource && !roomState?.fileName) {
     return (
       <div className="w-full h-full bg-black flex flex-col items-center justify-center gap-4 text-center rounded-lg p-4">
         <Film className="w-16 h-16 text-muted-foreground" />
@@ -579,11 +577,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       </div>
     );
   }
-
-  // A user is sharing a local file, but this user hasn't selected it yet.
-  const isPlaybackDisabled = roomState?.fileName && !roomState.videoUrl && !localVideoUrlRef.current;
-  
-  if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
 
   return (
     <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
@@ -600,22 +593,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
             </AlertDescription>
             <div className="mt-4">
               <Button asChild variant="secondary"><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Correct Video File</label></Button>
-              <input id="video-upload-mismatch" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
-            </div>
-          </Alert>
-        </div>
-      )}
-
-      {!hasVideoSource && roomState?.fileName && !isPlaybackDisabled && (
-         <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4">
-          <Alert className="max-w-md">
-            <Film className="h-4 w-4" />
-            <AlertTitle>Waiting for file</AlertTitle>
-            <AlertDescription>
-              The group is watching <span className="font-bold">{roomState?.fileName}</span>. Choose the same file on your device to start playback.
-            </AlertDescription>
-            <div className="mt-4">
-              <Button asChild><label htmlFor="video-upload-mismatch" className="cursor-pointer">Choose Video File</label></Button>
               <input id="video-upload-mismatch" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" />
             </div>
           </Alert>
@@ -653,7 +630,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                         <div className="grid gap-3 p-2">
                             <h4 className="font-medium leading-none">Video Info</h4>
                             <div className="text-sm space-y-2">
-                                <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? roomState?.fileName ?? 'N/A'}</span></p>
+                                <p><span className="font-semibold">File:</span> <span className="text-muted-foreground break-all">{localFileName ?? 'N/A'}</span></p>
                                 <p><span className="font-semibold">Source:</span> <span className="text-muted-foreground break-all">{roomState?.videoUrl ? 'URL' : 'Local File'}</span></p>
                                 <p><span className="font-semibold">Duration:</span> <span className="text-muted-foreground">{formatTime(duration)}</span></p>
                                 <p><span className="font-semibold">Resolution:</span> <span className="text-muted-foreground">{videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}</span></p>
@@ -698,7 +675,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                                 {searchStep === 'movie' && (
                                   <form onSubmit={handleMovieSearch} className="flex gap-2">
                                       <Input 
-                                          placeholder={localFileName || roomState?.fileName || 'e.g., Inception'}
+                                          placeholder={localFileName || 'e.g., Inception'}
                                           value={searchQuery}
                                           onChange={(e) => setSearchQuery(e.target.value)}
                                           className="bg-input"
@@ -819,7 +796,9 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                         </Avatar>
                         <div className="flex-1">
                             <p className="font-semibold text-sm">{lastMessage.user.name}</p>
-                            <p className="text-sm text-muted-foreground truncate">{lastMessage.text}</p>
+                            <p className="text-sm text-muted-foreground truncate">
+                                {lastMessage.type === 'gif' ? 'Sent a GIF' : lastMessage.text}
+                            </p>
                         </div>
                     </div>
                 </div>

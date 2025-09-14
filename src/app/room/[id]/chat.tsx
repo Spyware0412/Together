@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useTransition } from 'react';
+import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar, ScrollAreaViewport } from '@/components/ui/scroll-area';
-import { Send, Settings, User } from 'lucide-react';
+import { Send, Settings, User, SmilePlus, Search, Loader2 } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { database } from '@/lib/firebase';
 import { ref, onValue, push, serverTimestamp, off } from 'firebase/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useDebounce } from '@/hooks/use-debounce';
 
 interface Message {
     id: string;
@@ -18,7 +21,9 @@ interface Message {
         name: string;
         avatar: string;
     };
-    text: string;
+    text?: string;
+    gif?: string;
+    type: 'text' | 'gif';
     timestamp: number;
 }
 
@@ -27,6 +32,13 @@ interface UserProfile {
     name: string;
     email: string;
     avatar: string;
+}
+
+interface Gif {
+    id: string;
+    url: string;
+    preview: string;
+    dims: [number, number];
 }
 
 interface ChatProps {
@@ -40,6 +52,13 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     
+    // GIF state
+    const [isGifPickerOpen, setIsGifPickerOpen] = useState(false);
+    const [gifSearchQuery, setGifSearchQuery] = useState('');
+    const [gifs, setGifs] = useState<Gif[]>([]);
+    const [isSearchingGifs, startGifSearchTransition] = useTransition();
+    const debouncedSearchTerm = useDebounce(gifSearchQuery, 300);
+
     const viewportRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const messagesRef = ref(database, `rooms/${roomId}/chat`);
@@ -50,6 +69,23 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
             setUser(JSON.parse(storedUser));
         }
     }, []);
+
+    useEffect(() => {
+        const fetchGifs = async () => {
+            startGifSearchTransition(async () => {
+                const endpoint = debouncedSearchTerm ? `/api/tenor?q=${debouncedSearchTerm}` : '/api/tenor';
+                const res = await fetch(endpoint);
+                const data = await res.json();
+                if (data.gifs) {
+                    setGifs(data.gifs);
+                }
+            });
+        };
+        if(isGifPickerOpen) {
+            fetchGifs();
+        }
+    }, [isGifPickerOpen, debouncedSearchTerm]);
+
 
     useEffect(() => {
         const onMessages = (snapshot: any) => {
@@ -84,12 +120,27 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
             const msg = {
                 user: { id: user.id, name: user.name, avatar: user.avatar },
                 text: newMessage.trim(),
+                type: 'text',
                 timestamp: serverTimestamp()
             };
             push(messagesRef, msg);
             setNewMessage('');
         }
     };
+
+    const handleSendGif = (gifUrl: string) => {
+        if(user) {
+            const msg = {
+                user: { id: user.id, name: user.name, avatar: user.avatar },
+                gif: gifUrl,
+                type: 'gif',
+                timestamp: serverTimestamp()
+            };
+            push(messagesRef, msg);
+            setIsGifPickerOpen(false);
+            setGifSearchQuery('');
+        }
+    }
     
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -162,9 +213,22 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
                                 </Avatar>
                                 <div className="flex-1">
                                     <p className="font-semibold text-sm">{message.user.id === user.id ? "You" : message.user.name}</p>
-                                    <div className="text-sm bg-secondary p-2 rounded-lg mt-1 w-fit max-w-full">
-                                        <p className="break-words">{message.text}</p>
-                                    </div>
+                                    {message.type === 'gif' ? (
+                                        <div className="mt-1 bg-secondary rounded-lg overflow-hidden w-fit">
+                                            <Image 
+                                              src={message.gif!} 
+                                              alt="gif" 
+                                              width={200}
+                                              height={150}
+                                              unoptimized
+                                              className="max-w-xs h-auto"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm bg-secondary p-2 rounded-lg mt-1 w-fit max-w-full">
+                                            <p className="break-words">{message.text}</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -174,6 +238,41 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
             </ScrollArea>
             <div className="p-4 border-t">
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                    <Popover open={isGifPickerOpen} onOpenChange={setIsGifPickerOpen}>
+                        <PopoverTrigger asChild>
+                            <Button type="button" variant="ghost" size="icon">
+                                <SmilePlus className="w-5 h-5"/>
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80" align="start">
+                            <div className="space-y-2">
+                                <div className="relative">
+                                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
+                                    <Input
+                                        placeholder="Search GIFs..."
+                                        value={gifSearchQuery}
+                                        onChange={(e) => setGifSearchQuery(e.target.value)}
+                                        className="pl-8"
+                                    />
+                                </div>
+                                <ScrollArea className="h-60">
+                                    <div className="grid grid-cols-2 gap-2 p-1">
+                                        {isSearchingGifs ? (
+                                            <div className="col-span-2 flex justify-center items-center h-full">
+                                                <Loader2 className="w-8 h-8 animate-spin"/>
+                                            </div>
+                                        ) : (
+                                            gifs.map(gif => (
+                                                <button key={gif.id} onClick={() => handleSendGif(gif.url)} className="relative aspect-square focus:outline-none focus:ring-2 focus:ring-ring rounded overflow-hidden">
+                                                    <Image src={gif.preview} alt="gif" layout="fill" objectFit="cover" unoptimized/>
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                </ScrollArea>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                     <Input
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}

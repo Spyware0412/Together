@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -27,7 +25,9 @@ interface Message {
         name: string;
         avatar: string;
     };
-    text: string;
+    text?: string;
+    gif?: string;
+    type: 'text' | 'gif';
     timestamp: number;
 }
 
@@ -55,7 +55,7 @@ export default function RoomPage() {
   const userStatusRef = useRef<any>(null);
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const activeUsersRef = useRef(activeUsers);
+  const activeUsersRef = useRef<UserProfile[]>([]);
   
   useEffect(() => {
     activeUsersRef.current = activeUsers;
@@ -79,7 +79,7 @@ export default function RoomPage() {
       const newUsers = userList.filter(u => !previousUsers.some(au => au.id === u.id));
       const currentUser = JSON.parse(localStorage.getItem('cinesync_user') || '{}');
 
-      if (previousUsers.length > 0) { // Don't show toast on initial load
+      if (previousUsers.length > 0 && userList.length > previousUsers.length) { 
         newUsers.forEach(newUser => {
           if (newUser.id !== currentUser.id && newUser.name) {
              toast({
