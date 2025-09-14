@@ -64,7 +64,7 @@ export function AuthForm() {
                 const userId = Object.keys(usersData)[0];
                 userProfile = { ...usersData[userId], id: userId };
 
-                // If username in form is different, just log in with existing data, don't update.
+                // If username in form is different, just log in with existing data and show a warning.
                 if (userProfile.name !== data.username) {
                      toast({
                         title: "Welcome Back!",
