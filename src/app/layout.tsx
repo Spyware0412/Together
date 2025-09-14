@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import './globals.css';
+import Script from 'next/script';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
           {children}
           <Toaster />
+          <Script src="https://cdn.jsdelivr.net/npm/tsparticles-slim@2.12.0/tsparticles.slim.bundle.min.js" strategy="afterInteractive" />
       </body>
     </html>
   );
