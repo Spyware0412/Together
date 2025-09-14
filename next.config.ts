@@ -30,6 +30,10 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+   env: {
+    NEXT_PUBLIC_ADMIN_EMAIL: process.env.ADMIN_EMAIL,
+    NEXT_PUBLIC_ADMIN_PIN: process.env.ADMIN_PIN,
+  },
 };
 
 export default nextConfig;

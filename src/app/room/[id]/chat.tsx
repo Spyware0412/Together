@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect, useTransition } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar, ScrollAreaViewport } from '@/components/ui/scroll-area';
-import { Send, Settings, User, SmilePlus, Search, Loader2 } from 'lucide-react';
+import { Send, Settings, User, SmilePlus, Search, Loader2, Shield } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { database } from '@/lib/firebase';
 import { ref, onValue, push, serverTimestamp, off } from 'firebase/database';
@@ -198,6 +199,11 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
                                <p className="font-semibold text-lg">{user.name}</p>
                                <p className="text-sm text-muted-foreground">{user.email}</p>
                             </div>
+                            <Button variant="secondary" asChild className="w-full">
+                                <Link href="/admin">
+                                    <Shield className="mr-2 h-4 w-4" /> Admin Panel
+                                </Link>
+                            </Button>
                         </div>
                     </DialogContent>
                 </Dialog>
