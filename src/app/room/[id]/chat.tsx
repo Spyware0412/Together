@@ -130,7 +130,7 @@ export function Chat({ roomId, messages, activeUsers, user, setUser, theme, togg
         <div className="h-full flex flex-col">
             <CardHeader className="flex-row items-center justify-between gap-2 flex-wrap">
                  <CardTitle>Live Chat</CardTitle>
-                 <div className="flex items-center gap-1">
+                 <div className="flex items-center gap-1 flex-wrap">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm">
@@ -204,7 +204,8 @@ export function Chat({ roomId, messages, activeUsers, user, setUser, theme, togg
                                               src={message.gif!} 
                                               alt="gif" 
                                               width={200}
-                                              height={150}
+                                              height={0}
+                                              style={{ height: 'auto' }}
                                               unoptimized
                                               className="max-w-xs h-auto"
                                             />
@@ -273,3 +274,5 @@ export function Chat({ roomId, messages, activeUsers, user, setUser, theme, togg
         </div>
     );
 }
+
+    
