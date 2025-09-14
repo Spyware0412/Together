@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
 import { User, Loader2 } from 'lucide-react';
 import { database } from '@/lib/firebase';
-import { ref, query, orderByChild, equalTo, get, set, update } from 'firebase/database';
+import { ref, query, orderByChild, equalTo, get, set } from 'firebase/database';
 
 const formSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters long."),
@@ -62,20 +62,26 @@ export function AuthForm() {
                 // User with this email already exists.
                 const usersData = snapshot.val();
                 const userId = Object.keys(usersData)[0];
-                userProfile = { ...usersData[userId], id: userId };
+                const existingUser: UserProfile = { ...usersData[userId], id: userId };
 
-                // If username in form is different, just log in with existing data and show a warning.
-                if (userProfile.name !== data.username) {
-                     toast({
-                        title: "Welcome Back!",
-                        description: `Logged in as ${userProfile.name}. Your username has not been changed.`,
+                // Check if the username also matches
+                if (existingUser.name !== data.username) {
+                    toast({
+                        variant: "destructive",
+                        title: "Login Failed",
+                        description: "A user with this email already exists with a different username.",
                     });
-                } else {
-                     toast({
-                        title: "Welcome Back!",
-                        description: `Logged in as ${userProfile.name}.`,
-                    });
+                    setIsLoading(false);
+                    return; // Stop the login process
                 }
+
+                // Both email and username match, log the user in.
+                userProfile = existingUser;
+                toast({
+                    title: "Welcome Back!",
+                    description: `Logged in as ${userProfile.name}.`,
+                });
+
             } else {
                 // New user, create a profile.
                 const userId = `user_${uuidv4()}`;
