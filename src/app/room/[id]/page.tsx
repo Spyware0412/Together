@@ -258,7 +258,7 @@ export default function RoomPage() {
             <div className="flex items-center gap-2">
                 <Clapperboard className="w-6 h-6 text-primary flex-shrink-0" />
                 <h1 className="text-base md:text-xl font-semibold break-all">
-                  Room: <span className="font-mono text-primary bg-accent px-2 py-1 rounded-md">{roomId}</span>
+                  Room: <span className="font-mono text-primary bg-accent px-2 py-1 rounded-md text-sm md:text-base">{roomId}</span>
                 </h1>
             </div>
             <div className="flex items-center gap-2">
@@ -338,5 +338,7 @@ export default function RoomPage() {
     </div>
   );
 }
+
+    
 
     
