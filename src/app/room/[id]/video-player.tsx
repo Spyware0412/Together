@@ -598,7 +598,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
       <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" preload="metadata" />
       <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       
-      <div className="absolute inset-0 z-20 pointer-events-none">
+      <div className="absolute inset-0 z-10 pointer-events-none">
         {isPlaybackDisabled && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 pointer-events-auto">
             <Alert className="max-w-md">
@@ -615,8 +615,8 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
           </div>
         )}
 
-        <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 pointer-events-auto", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0")}>
-          <div className="flex flex-col gap-2">
+        <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0")}>
+          <div className="flex flex-col gap-2 pointer-events-auto">
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono text-white">{formatTime(progress)}</span>
               <Slider value={[progress]} max={duration} step={1} onValueChange={handleProgressChange} onValueCommit={handleProgressChangeCommit} className="flex-1" disabled={isPlaybackDisabled} />
@@ -627,7 +627,7 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                  <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}>
                   {roomState?.isPlaying ? <Pause /> : <Play />}
                 </Button>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-32">
                   <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white hover:bg-white/10" >
                       {isMuted || volume === 0 ? <VolumeX /> : <Volume2 />}
                   </Button>
@@ -790,10 +790,10 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 20, scale: 0.9 }}
                   transition={{ ease: "easeInOut", duration: 0.3 }}
-                  className="absolute bottom-20 right-5 z-30 pointer-events-auto"
+                  className="absolute bottom-20 right-5 z-20"
               >
                   <div 
-                      className="p-3 rounded-lg bg-popover border border-border shadow-2xl cursor-pointer w-80"
+                      className="p-3 rounded-lg bg-popover border border-border shadow-2xl cursor-pointer w-80 pointer-events-auto"
                       onClick={onNotificationClick}
                   >
                       <div className="flex items-center justify-between mb-2">

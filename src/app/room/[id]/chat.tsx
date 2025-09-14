@@ -205,7 +205,7 @@ export function Chat({ roomId, messages, activeUsers, user, setUser, theme, togg
                                               alt="gif" 
                                               width={200}
                                               height={0}
-                                              style={{ height: 'auto' }}
+                                              style={{ height: 'auto', objectFit: 'contain' }}
                                               unoptimized
                                               className="max-w-xs h-auto"
                                             />
