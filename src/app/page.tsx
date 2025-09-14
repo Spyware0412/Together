@@ -6,7 +6,7 @@ import { Film } from 'lucide-react';
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-background/80">
+    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-background/80 backdrop-blur-sm">
       <Card className="w-full max-w-md shadow-2xl bg-card/80 backdrop-blur-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center items-center gap-3 mb-4">

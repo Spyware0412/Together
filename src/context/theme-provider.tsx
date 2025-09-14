@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { themes } from "@/lib/themes"
 import { AnimatePresence, motion } from "framer-motion"
+import { themes } from "@/lib/themes"
 
 type ThemeProviderProps = {
   children: React.ReactNode
@@ -18,7 +18,7 @@ type ThemeProviderState = {
 }
 
 const initialState: ThemeProviderState = {
-  theme: "default",
+  theme: "theme-default",
   setTheme: () => null,
 }
 
@@ -26,29 +26,22 @@ const ThemeProviderContext = React.createContext<ThemeProviderState>(initialStat
 
 export function ThemeProvider({
   children,
-  defaultTheme = "default",
+  defaultTheme = "theme-default",
   storageKey = "cinesync-theme",
   attribute = "class",
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = React.useState(
-    () => (typeof window !== 'undefined' && localStorage.getItem(storageKey)) || defaultTheme
+    () => (typeof window !== 'undefined' ? localStorage.getItem(storageKey) : defaultTheme) || defaultTheme
   )
 
   React.useEffect(() => {
     const root = window.document.documentElement
+    
+    // Remove all possible theme classes
+    themes.forEach(t => root.classList.remove(t.name));
 
-    root.classList.remove(...themes.map(t => t.name))
-
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light"
-      root.classList.add(systemTheme)
-      return
-    }
-
+    // Add the currently selected theme class
     root.classList.add(theme)
   }, [theme])
 
