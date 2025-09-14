@@ -606,7 +606,6 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
         </div>
       )}
 
-      <div className={cn("absolute inset-0 bg-background/20 transition-opacity duration-300", showControls ? "opacity-100" : "opacity-0", "pointer-events-none")} />
       
       <div className={cn("absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background/80 to-transparent transition-opacity duration-300 z-10", showControls || !roomState?.isPlaying ? "opacity-100" : "opacity-0", "pointer-events-auto")}>
         <div className="flex flex-col gap-2">
@@ -816,4 +815,4 @@ export function VideoPlayer({ roomId, lastMessage, showNotification, onNotificat
   );
 }
 
-  
+    
