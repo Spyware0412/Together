@@ -46,6 +46,7 @@ export default function RoomPage() {
   const roomId = params.id as string;
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const prevMessagesRef = useRef<Message[]>([]);
   const [lastMessage, setLastMessage] = useState<Message | null>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
@@ -67,15 +68,21 @@ export default function RoomPage() {
   useEffect(() => {
     const savedTheme = localStorage.getItem('cinesync-theme') || 'dark';
     setTheme(savedTheme);
-    document.documentElement.classList.toggle('light', savedTheme === 'light');
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(savedTheme);
   }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem('cinesync-theme', newTheme);
-    document.documentElement.classList.toggle('light', newTheme === 'light');
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(newTheme);
   };
+
+  useEffect(() => {
+    prevMessagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -123,14 +130,16 @@ export default function RoomPage() {
                 ...data[key]
             })).sort((a, b) => a.timestamp - b.timestamp);
 
-            const oldMessages = messages;
+            const oldMessages = prevMessagesRef.current;
             setMessages(messageList);
 
             if (oldMessages.length > 0 && messageList.length > oldMessages.length) {
-                const newMessage = messageList[messageList.length - 1];
+                const newMessages = messageList.slice(oldMessages.length);
                 const currentUser = JSON.parse(localStorage.getItem('cinesync_user') || '{}');
-                if (newMessage.user.id !== currentUser.id) {
-                    handleNewMessage(newMessage);
+                const otherUserMessages = newMessages.filter(msg => msg.user.id !== currentUser.id);
+
+                if (otherUserMessages.length > 0) {
+                    handleNewMessage(otherUserMessages[otherUserMessages.length - 1]);
                 }
             }
         }
@@ -357,5 +366,3 @@ export default function RoomPage() {
     </div>
   );
 }
-
-    
