@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -191,9 +192,9 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   useEffect(() => {
     if (playerRef.current) {
         if (isInfoOpen || isSettingsOpen) {
-            playerRef.current.setAttribute('inert', '');
+            // playerRef.current.setAttribute('inert', '');
         } else {
-            playerRef.current.removeAttribute('inert');
+            // playerRef.current.removeAttribute('inert');
         }
     }
   }, [isInfoOpen, isSettingsOpen]);
@@ -310,6 +311,8 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
       setSearchQuery(cleanFileName);
       setLocalFileName(file.name); 
+      setMovieSearchResults([]);
+      setSubtitleSearchResults([]);
       
       set(roomStateRef, {
         fileName: file.name,
@@ -321,8 +324,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
       if (videoRef.current) videoRef.current.currentTime = 0;
       setProgress(0);
       setSelectedTextTrack("off");
-      setMovieSearchResults([]);
-      setSubtitleSearchResults([]);
       setSearchStep('movie');
     }
   };
@@ -494,7 +495,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     if (videoRef.current) {
       const newMuted = !isMuted;
       videoRef.current.muted = newMuted;
-      setIsMuted(newMuted);
       if (!newMuted && volume === 0) handleVolumeChange([0.5]);
     }
   };
@@ -933,7 +933,9 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           >
             <div className="h-[40vh] bg-background/80 backdrop-blur-sm border border-border rounded-lg flex flex-col">
               <div className="p-2 border-b flex justify-between items-center">
-                  <h3 className="font-semibold px-2">Live Chat</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold px-2">Live Chat</h3>
+                  </div>
                   <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(false)}>
                       <X className="w-4 h-4" />
                   </Button>
@@ -993,4 +995,5 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     </div>
   );
 }
+
 
