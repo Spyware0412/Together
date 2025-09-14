@@ -265,8 +265,8 @@ export default function RoomPage() {
                <Dialog open={isUrlDialogOpen} onOpenChange={setIsUrlDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <LinkIcon className="w-4 h-4 md:mr-2" />
-                    <span className="hidden md:inline">Load URL</span>
+                    <LinkIcon className="w-4 h-4 lg:mr-2" />
+                    <span className="hidden lg:inline">Load URL</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
@@ -300,11 +300,11 @@ export default function RoomPage() {
               </Dialog>
 
                <Button variant="outline" size="sm" onClick={handleChangeVideoClick} title="Change Video">
-                  <Video className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Change Video</span>
+                  <Video className="w-4 h-4 lg:mr-2" />
+                  <span className="hidden lg:inline">Change Video</span>
               </Button>
             
-              <div className="md:hidden">
+              <div className="lg:hidden">
                 <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                   <SheetTrigger asChild>
                     <Button variant="outline" size="icon">
@@ -332,9 +332,11 @@ export default function RoomPage() {
           />
         </div>
       </main>
-      <aside className="w-[350px] border-l border-border flex-col hidden md:flex">
+      <aside className="w-[350px] border-l border-border flex-col hidden lg:flex">
          <ChatComponents />
       </aside>
     </div>
   );
 }
+
+    
