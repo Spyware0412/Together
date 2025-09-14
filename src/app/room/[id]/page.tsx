@@ -5,10 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video, Loader2 } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video, Loader2, Palette } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
 import { ref, onValue, off, update, serverTimestamp, set } from 'firebase/database';
@@ -16,7 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-
+import { themes, Theme } from '@/lib/themes';
+import { useTheme } from '@/context/theme-provider';
 
 interface Message {
     id: string;
@@ -50,6 +51,7 @@ export default function RoomPage() {
   const [isUrlDialogOpen, setIsUrlDialogOpen] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
   const [isResolvingUrl, setIsResolvingUrl] = useState(false);
+  const { theme, setTheme } = useTheme();
   
   const { toast } = useToast();
   const userStatusRef = useRef<any>(null);
@@ -192,7 +194,7 @@ export default function RoomPage() {
                   Room: <span className="font-mono text-primary bg-white/10 px-2 py-1 rounded-md">{roomId}</span>
                 </h1>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
                <Dialog open={isUrlDialogOpen} onOpenChange={setIsUrlDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -229,6 +231,26 @@ export default function RoomPage() {
                   </Button>
                 </DialogContent>
               </Dialog>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Palette className="w-4 h-4 mr-2" />
+                    Theme
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Select a Theme</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+                    {themes.map((themeOption) => (
+                      <DropdownMenuRadioItem key={themeOption.name} value={themeOption.name}>
+                        {themeOption.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -306,5 +328,3 @@ export default function RoomPage() {
     </div>
   );
 }
-
-    
