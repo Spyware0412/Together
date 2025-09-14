@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Chat } from './chat';
 import { ContentSuggester } from './content-suggester';
 import { VideoPlayer } from './video-player';
-import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Video, Loader2, Sun, Moon } from 'lucide-react';
+import { Users, Clapperboard, MessageSquare, LogOut, Link as LinkIcon, Play, Loader2, Sun, Moon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
+import { Video } from 'lucide-react';
 
 interface Message {
     id: string;
@@ -45,6 +45,7 @@ export default function RoomPage() {
   const router = useRouter();
   const roomId = params.id as string;
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [lastMessage, setLastMessage] = useState<Message | null>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
@@ -66,26 +67,20 @@ export default function RoomPage() {
   useEffect(() => {
     const savedTheme = localStorage.getItem('cinesync-theme') || 'dark';
     setTheme(savedTheme);
-    if (savedTheme === 'light') {
-        document.documentElement.classList.add('light');
-    } else {
-        document.documentElement.classList.remove('light');
-    }
+    document.documentElement.classList.toggle('light', savedTheme === 'light');
   }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem('cinesync-theme', newTheme);
-    if (newTheme === 'light') {
-        document.documentElement.classList.add('light');
-    } else {
-        document.documentElement.classList.remove('light');
-    }
+    document.documentElement.classList.toggle('light', newTheme === 'light');
   };
 
   useEffect(() => {
     if (!roomId) return;
+
+    // --- User presence ---
     const usersRef = ref(database, `rooms/${roomId}/users`);
     const storedUser = localStorage.getItem('cinesync_user');
     
@@ -118,8 +113,34 @@ export default function RoomPage() {
 
     onValue(usersRef, onUsersChange);
 
+    // --- Message handling ---
+    const messagesRef = ref(database, `rooms/${roomId}/chat`);
+    const onMessages = (snapshot: any) => {
+        const data = snapshot.val();
+        if (data) {
+            const messageList: Message[] = Object.keys(data).map(key => ({
+                id: key,
+                ...data[key]
+            })).sort((a, b) => a.timestamp - b.timestamp);
+
+            const oldMessages = messages;
+            setMessages(messageList);
+
+            if (oldMessages.length > 0 && messageList.length > oldMessages.length) {
+                const newMessage = messageList[messageList.length - 1];
+                const currentUser = JSON.parse(localStorage.getItem('cinesync_user') || '{}');
+                if (newMessage.user.id !== currentUser.id) {
+                    handleNewMessage(newMessage);
+                }
+            }
+        }
+    };
+    onValue(messagesRef, onMessages);
+
+
     return () => {
       off(usersRef, 'value', onUsersChange);
+      off(messagesRef, 'value', onMessages);
       if (userStatusRef.current) {
         update(userStatusRef.current, { online: false, last_seen: serverTimestamp() });
       }
@@ -208,7 +229,7 @@ export default function RoomPage() {
   const ChatComponents = () => (
     <>
       <div className="flex-1 min-h-0">
-        <Chat roomId={roomId} onNewMessage={handleNewMessage} />
+        <Chat roomId={roomId} messages={messages} />
       </div>
       <div className="border-t border-border">
         <ContentSuggester />
@@ -223,7 +244,7 @@ export default function RoomPage() {
             <div className="flex items-center gap-2">
                 <Clapperboard className="w-6 h-6 text-primary" />
                 <h1 className="text-lg md:text-xl font-semibold">
-                  Room: <span className="font-mono text-primary bg-white/10 px-2 py-1 rounded-md">{roomId}</span>
+                  Room: <span className="font-mono text-primary bg-accent px-2 py-1 rounded-md">{roomId}</span>
                 </h1>
             </div>
             <div className="flex items-center gap-2">
@@ -336,3 +357,5 @@ export default function RoomPage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from 'react';
@@ -10,7 +11,7 @@ import { ScrollArea, ScrollBar, ScrollAreaViewport } from '@/components/ui/scrol
 import { Send, Settings, User, SmilePlus, Search, Loader2, Shield } from 'lucide-react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { database } from '@/lib/firebase';
-import { ref, onValue, push, serverTimestamp, off } from 'firebase/database';
+import { ref, push, serverTimestamp } from 'firebase/database';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -44,11 +45,10 @@ interface Gif {
 
 interface ChatProps {
     roomId: string;
-    onNewMessage: (message: Message) => void;
+    messages: Message[];
 }
 
-export function Chat({ roomId, onNewMessage }: ChatProps) {
-    const [messages, setMessages] = useState<Message[]>([]);
+export function Chat({ roomId, messages }: ChatProps) {
     const [newMessage, setNewMessage] = useState('');
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -87,33 +87,6 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
         }
     }, [isGifPickerOpen, debouncedSearchTerm]);
 
-
-    useEffect(() => {
-        const onMessages = (snapshot: any) => {
-            const data = snapshot.val();
-            if (data) {
-                const messageList: Message[] = Object.keys(data).map(key => ({
-                    id: key,
-                    ...data[key]
-                })).sort((a, b) => a.timestamp - b.timestamp);
-                setMessages(messageList);
-
-                if (messageList.length > 0) {
-                    const lastMessage = messageList[messageList.length - 1];
-                    // Notify parent if the message is not from the current user
-                    if (lastMessage.user.id !== user?.id) {
-                        onNewMessage(lastMessage);
-                    }
-                }
-            }
-        };
-
-        onValue(messagesRef, onMessages);
-
-        return () => {
-            off(messagesRef, 'value', onMessages);
-        };
-    }, [roomId, user, onNewMessage]);
 
     const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
@@ -294,3 +267,5 @@ export function Chat({ roomId, onNewMessage }: ChatProps) {
         </div>
     );
 }
+
+    
