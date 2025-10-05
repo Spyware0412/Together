@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -39,7 +38,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label";
 import {
@@ -58,6 +56,7 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LoadingAnimation } from "@/components/loading-animation";
+import type { UserProfile } from '@/components/auth-form';
 
 interface Message {
     id: string;
@@ -108,14 +107,6 @@ interface TmdbMovieSearchResult {
   release_date: string;
   poster_path: string | null;
 }
-
-interface UserProfile {
-    id: string;
-    name: string;
-    email: string;
-    avatar: string;
-}
-
 
 // Helper function to convert SRT subtitles to VTT format
 const srtToVtt = (srtText: string): string => {
@@ -175,11 +166,11 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const [isChatOverlayOpen, setIsChatOverlayOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
 
+  const videoRef = useRef<HTMLVideoElement>(null);
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
   const localVideoUrlRef = useRef<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const playerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const chatViewportRef = useRef<HTMLDivElement>(null);
   const isSeeking = useRef(false);
@@ -188,16 +179,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
 
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
   const messagesRef = ref(database, `rooms/${roomId}/chat`);
-
-  useEffect(() => {
-    if (playerRef.current) {
-        if (isInfoOpen || isSettingsOpen) {
-            // playerRef.current.setAttribute('inert', '');
-        } else {
-            // playerRef.current.removeAttribute('inert');
-        }
-    }
-  }, [isInfoOpen, isSettingsOpen]);
+  const videoInfoRef = useRef({width: 0, height: 0});
   
   useEffect(() => {
     if (chatViewportRef.current) {
@@ -260,17 +242,18 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           setLocalFileName(null);
       }
 
-      if (videoRef.current && data) {
+      const video = videoRef.current;
+      if (video && data) {
         const serverTime = data.progress ?? 0;
-        const clientTime = videoRef.current.currentTime;
+        const clientTime = video.currentTime;
         if (Math.abs(serverTime - clientTime) > 2) {
-          videoRef.current.currentTime = serverTime;
+          video.currentTime = serverTime;
         }
 
         const serverPlaying = data.isPlaying ?? false;
-        if (serverPlaying !== !videoRef.current.paused) {
-          if (serverPlaying) videoRef.current.play().catch(() => {});
-          else videoRef.current.pause();
+        if (serverPlaying !== !video.paused) {
+          if (serverPlaying) video.play().catch(() => {});
+          else video.pause();
         }
       }
 
@@ -335,7 +318,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     setTimeout(() => {
       const availableTextTracks = Array.from(video.textTracks);
       setTextTracks(availableTextTracks);
-
+      
       const firstSub = availableTextTracks.find(t => t.kind === 'subtitles');
       if (firstSub && selectedTextTrack === 'off') {
         availableTextTracks.forEach(t => t.mode = 'hidden');
@@ -343,7 +326,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
         setSelectedTextTrack(firstSub.label || `track-${firstSub.language}`);
       } else {
         availableTextTracks.forEach(track => {
-            track.mode = (track.label === selectedTextTrack || track.id === selectedTextTrack) ? 'showing' : 'hidden';
+            track.mode = (track.label === selectedTextTrack) ? 'showing' : 'hidden';
         });
       }
     }, 500);
@@ -370,29 +353,42 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   };
   
   const addTrackToVideo = (trackUrl: string, label: string, language: string, isExternal = true) => {
-    if (!videoRef.current) return;
-    const trackId = `${isExternal ? 'external-' : ''}${label}`;
-    
-    const oldTrackEl = playerRef.current?.querySelector(`track[id="${trackId}"]`);
-    if(oldTrackEl) oldTrackEl.remove();
+    const video = videoRef.current;
+    if (!video) return;
 
+    const trackId = `${isExternal ? 'external-' : ''}${label}`;
+
+    // Remove existing track if any
+    const existingTracks = Array.from(video.textTracks).filter(t => t.label === label);
+    existingTracks.forEach(track => {
+        // We can't directly remove text tracks. Instead we disable them.
+        track.mode = 'disabled';
+    });
+
+    // Create a new track element and append it
     const trackElement = document.createElement('track');
     trackElement.id = trackId;
     trackElement.kind = 'subtitles';
     trackElement.label = label;
     trackElement.srclang = language;
     trackElement.src = trackUrl;
+    trackElement.default = false; // Set to false to manage manually
     
-    videoRef.current.appendChild(trackElement);
+    // Clear old external ref for this label
+    const oldUrl = externalSubtitlesRef.current.get(label);
+    if(oldUrl) URL.revokeObjectURL(oldUrl);
+
     if(isExternal) {
-      externalSubtitlesRef.current.set(trackId, trackUrl);
+      externalSubtitlesRef.current.set(label, trackUrl);
     }
+    
+    video.appendChild(trackElement);
     
     setTimeout(() => {
         loadTracks();
         setSelectedTextTrack(label);
         toast({ title: "Success", description: "Subtitle file loaded."});
-    }, 100);
+    }, 500);
   }
 
   const handleMovieSearch = async (e: React.FormEvent) => {
@@ -486,16 +482,19 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
       const newVolume = value[0];
       videoRef.current.volume = newVolume;
       setVolume(newVolume);
-      videoRef.current.muted = newVolume === 0;
       setIsMuted(newVolume === 0);
     }
   };
 
   const toggleMute = () => {
     if (videoRef.current) {
-      const newMuted = !isMuted;
+      const newMuted = !videoRef.current.muted;
       videoRef.current.muted = newMuted;
-      if (!newMuted && volume === 0) handleVolumeChange([0.5]);
+      setIsMuted(newMuted);
+      if (!newMuted && volume === 0) {
+        setVolume(0.5);
+        videoRef.current.volume = 0.5;
+      }
     }
   };
 
@@ -515,11 +514,11 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   };
 
   const toggleFullScreen = () => {
-    const player = playerRef.current;
-    if (player) {
+    const container = containerRef.current;
+    if (container) {
       if (!document.fullscreenElement) {
-        player.requestFullscreen().catch((err) => {
-          console.error(`Error enabling fullscreen: ${err.message}`);
+        container.requestFullscreen().catch((err) => {
+          alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
         });
       } else {
         document.exitFullscreen();
@@ -528,11 +527,17 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   };
   
   useEffect(() => {
-    textTracks.forEach((track) => {
-        track.mode = (track.label === selectedTextTrack || track.id === selectedTextTrack) ? 'showing' : 'hidden';
-    });
+    const video = videoRef.current;
+    if (!video) return;
+    const tracks = video.textTracks;
+    for (let i = 0; i < tracks.length; i++) {
+        const track = tracks[i];
+        track.mode = (track.label === selectedTextTrack) ? 'showing' : 'hidden';
+    }
     if (selectedTextTrack === 'off') {
-        textTracks.forEach(t => t.mode = 'hidden');
+       for (let i = 0; i < tracks.length; i++) {
+          tracks[i].mode = 'hidden';
+       }
     }
   }, [selectedTextTrack, textTracks]);
   
@@ -549,49 +554,16 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     if (sheet) {
         if (sheet.cssRules.length > 0) sheet.deleteRule(0);
         sheet.insertRule(`
-        ::cue {
-          font-size: ${subtitleSettings.fontSize}rem !important;
-          color: ${subtitleSettings.color} !important;
-          background-color: rgba(0, 0, 0, 0.7) !important;
-          bottom: ${subtitleSettings.position}% !important;
-        }
-      `, 0);
+            ::cue {
+              font-size: ${subtitleSettings.fontSize}rem !important;
+              color: ${subtitleSettings.color} !important;
+              background-color: rgba(0, 0, 0, 0.7) !important;
+              bottom: ${subtitleSettings.position}% !important;
+            }
+          `, 0);
     }
   }, [subtitleSettings]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onPlay = () => syncState({ isPlaying: true });
-    const onPause = () => !isSeeking.current && syncState({ isPlaying: false });
-    const onTimeUpdate = () => {
-      if (isSeeking.current) return;
-      const currentTime = video.currentTime;
-      setProgress(currentTime);
-      if (Date.now() - lastSyncTimestamp.current > 3000) {
-        syncState({ progress: currentTime });
-        lastSyncTimestamp.current = Date.now();
-      }
-    };
-    const onDurationChange = () => video.duration !== Infinity && setDuration(video.duration);
-
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    video.addEventListener("timeupdate", onTimeUpdate);
-    video.addEventListener("durationchange", onDurationChange);
-    video.addEventListener("loadedmetadata", onDurationChange);
-    video.addEventListener("loadeddata", loadTracks);
-
-    return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-      video.removeEventListener("timeupdate", onTimeUpdate);
-      video.removeEventListener("durationchange", onDurationChange);
-      video.removeEventListener("loadedmetadata", onDurationChange);
-      video.removeEventListener("loadeddata", loadTracks);
-    };
-  }, [syncState, loadTracks]);
 
   const handleMouseMove = () => {
     setShowControls(true);
@@ -621,7 +593,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const hasVideoSource = !!videoSrc;
   const isPlaybackDisabled = roomState?.fileName && !roomState.videoUrl && !localVideoUrlRef.current;
 
-  if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
 
   if (!hasVideoSource && !roomState?.fileName) {
     return (
@@ -638,8 +609,35 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   }
 
   return (
-    <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" preload="metadata" />
+    <div ref={containerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+      <video
+        ref={videoRef}
+        src={videoSrc || undefined}
+        onClick={togglePlay}
+        onPlay={() => syncState({ isPlaying: true })}
+        onPause={() => !isSeeking.current && syncState({ isPlaying: false })}
+        onTimeUpdate={(e) => {
+            if (isSeeking.current) return;
+            const currentTime = e.currentTarget.currentTime;
+            setProgress(currentTime);
+            if (Date.now() - lastSyncTimestamp.current > 3000) {
+                syncState({ progress: currentTime });
+                lastSyncTimestamp.current = Date.now();
+            }
+        }}
+        onDurationChange={(e) => setDuration(e.currentTarget.duration)}
+        onVolumeChange={(e) => {
+            setVolume(e.currentTarget.volume);
+            setIsMuted(e.currentTarget.muted);
+        }}
+        onLoadedMetadata={(e) => {
+          setDuration(e.currentTarget.duration);
+          videoInfoRef.current = { width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight };
+        }}
+        onLoadedData={loadTracks}
+        className="w-full h-full object-contain"
+        playsInline
+      ></video>
       <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       
       {isPlaybackDisabled && (
@@ -674,46 +672,44 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
               <Info />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuContent
-              className="w-96 z-[9999] bg-background shadow-lg rounded-md"
-              align="end"
-            >
-              <div className="grid gap-3 p-2">
-                <h4 className="font-medium leading-none">Video Info</h4>
-                <div className="text-sm space-y-2">
-                  <p>
-                    <span className="font-semibold">File:</span>{" "}
-                    <span className="text-muted-foreground break-all">
-                      {localFileName ?? "N/A"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Source:</span>{" "}
-                    <span className="text-muted-foreground break-all">
-                      {roomState?.videoUrl ? "URL" : "Local File"}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Duration:</span>{" "}
-                    <span className="text-muted-foreground">
-                      {formatTime(duration)}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Resolution:</span>{" "}
-                    <span className="text-muted-foreground">
-                      {videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}
-                    </span>
-                  </p>
-                  <p>
-                    <span className="font-semibold">Subtitles:</span>{" "}
-                    <span className="text-muted-foreground">{textTracks.length}</span>
-                  </p>
-                </div>
+          <DropdownMenuContent
+            className="w-96 bg-background shadow-lg rounded-md"
+            align="end"
+          >
+            <div className="grid gap-3 p-2">
+              <h4 className="font-medium leading-none">Video Info</h4>
+              <div className="text-sm space-y-2">
+                <p>
+                  <span className="font-semibold">File:</span>{" "}
+                  <span className="text-muted-foreground break-all">
+                    {localFileName ?? "N/A"}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-semibold">Source:</span>{" "}
+                  <span className="text-muted-foreground break-all">
+                    {roomState?.videoUrl ? "URL" : "Local File"}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-semibold">Duration:</span>{" "}
+                  <span className="text-muted-foreground">
+                    {formatTime(duration)}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-semibold">Resolution:</span>{" "}
+                  <span className="text-muted-foreground">
+                    {videoInfoRef.current.width}x{videoInfoRef.current.height}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-semibold">Subtitles:</span>{" "}
+                  <span className="text-muted-foreground">{textTracks.length}</span>
+                </p>
               </div>
-            </DropdownMenuContent>
-          </DropdownMenuPortal>
+            </div>
+          </DropdownMenuContent>
         </DropdownMenu>
 
         <DropdownMenu onOpenChange={setIsSettingsOpen}>
@@ -727,130 +723,128 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
               <Settings />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuContent
-              className="w-96 z-[9999] bg-background shadow-lg rounded-md"
-              align="end"
-            >
-                <div className="grid gap-4 p-2">
-                    <div className="grid gap-2">
-                        <Label className="font-medium leading-none">Subtitles</Label>
-                        <Select onValueChange={setSelectedTextTrack} value={selectedTextTrack}>
-                            <SelectTrigger className="w-full"><SelectValue placeholder="Select subtitle" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="off">Off</SelectItem>
-                                {textTracks.map((track, i) => (
-                                    <SelectItem key={track.id || `track-${i}`} value={track.label || `track-${i}`}>{track.label} ({track.language})</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <div className="flex items-center gap-2 pt-1">
-                            <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload File</label></Button>
-                            <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
-                        </div>
-                    </div>
-                    <Separator/>
-                    <div className="grid gap-2">
-                        <div className="flex items-center justify-between">
-                        <Label className="font-medium leading-none">Search Subtitles Online</Label>
-                        {searchStep === 'subtitle' && (
-                            <Button variant="ghost" size="sm" onClick={resetSearch} className="flex items-center gap-1 text-xs h-auto p-1">
-                            <ArrowLeft className="w-3 h-3" /> Back
-                            </Button>
-                        )}
-                        </div>
-                        
-                        {searchStep === 'movie' && (
-                        <form onSubmit={handleMovieSearch} className="flex gap-2">
-                            <Input 
-                                placeholder={localFileName || 'e.g., Inception'}
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="bg-input"
-                            />
-                            <Button type="submit" size="icon" disabled={isSearching}>
-                                {isSearching ? <LoadingAnimation width="24px" height="24px" /> : <Search className="w-4 h-4" />}
-                            </Button>
-                        </form>
-                        )}
+          <DropdownMenuContent
+            className="w-96 bg-background shadow-lg rounded-md"
+            align="end"
+          >
+              <div className="grid gap-4 p-2">
+                  <div className="grid gap-2">
+                      <Label className="font-medium leading-none">Subtitles</Label>
+                      <Select onValueChange={setSelectedTextTrack} value={selectedTextTrack}>
+                          <SelectTrigger className="w-full"><SelectValue placeholder="Select subtitle" /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="off">Off</SelectItem>
+                              {textTracks.map((track, i) => (
+                                  <SelectItem key={track.id || `track-${i}`} value={track.label || `track-${i}`}>{track.label} ({track.language})</SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                      <div className="flex items-center gap-2 pt-1">
+                          <Button size="sm" variant="outline" asChild><label htmlFor="subtitle-upload" className="cursor-pointer flex items-center gap-2"><Upload className="w-4 h-4" /> Upload File</label></Button>
+                          <input id="subtitle-upload" type="file" accept=".srt,.vtt" onChange={handleSubtitleUpload} className="hidden" />
+                      </div>
+                  </div>
+                  <Separator/>
+                  <div className="grid gap-2">
+                      <div className="flex items-center justify-between">
+                      <Label className="font-medium leading-none">Search Subtitles Online</Label>
+                      {searchStep === 'subtitle' && (
+                          <Button variant="ghost" size="sm" onClick={resetSearch} className="flex items-center gap-1 text-xs h-auto p-1">
+                          <ArrowLeft className="w-3 h-3" /> Back
+                          </Button>
+                      )}
+                      </div>
+                      
+                      {searchStep === 'movie' && (
+                      <form onSubmit={handleMovieSearch} className="flex gap-2">
+                          <Input 
+                              placeholder={localFileName || 'e.g., Inception'}
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="bg-input"
+                          />
+                          <Button type="submit" size="icon" disabled={isSearching}>
+                              {isSearching ? <LoadingAnimation width="24px" height="24px" /> : <Search className="w-4 h-4" />}
+                          </Button>
+                      </form>
+                      )}
 
-                        {isSearching && <div className="flex justify-center p-4"><LoadingAnimation width="60px" height="60px"/></div>}
+                      {isSearching && <div className="flex justify-center p-4"><LoadingAnimation width="60px" height="60px"/></div>}
 
-                        {!isSearching && movieSearchResults.length > 0 && searchStep === 'movie' && (
-                            <ScrollArea className="h-60 mt-2 border rounded-md">
-                                <div className="p-2 space-y-2">
-                                {movieSearchResults.map((movie) => (
-                                <div
-                                    key={movie.id}
-                                    className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
-                                    onClick={() => handleSubtitleSearch(movie)}
-                                >
-                                    <div className="w-12 flex-shrink-0">
-                                    <Image
-                                        src={movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : 'https://picsum.photos/seed/1/92/138'}
-                                        width={48}
-                                        height={72}
-                                        alt={`Poster for ${movie.title}`}
-                                        className="rounded"
-                                        unoptimized
-                                    />
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-sm">{movie.title}</p>
-                                        <p className="text-xs text-muted-foreground">{movie.release_date.split('-')[0]}</p>
-                                    </div>
-                                </div>
-                                ))}
-                                </div>
-                            </ScrollArea>
-                        )}
-                        
-                        {!isSearching && subtitleSearchResults.length > 0 && searchStep === 'subtitle' && (
-                            <ScrollArea className="h-60 mt-2 border rounded-md">
-                                <div className="p-2 space-y-2">
-                                <div className="font-semibold text-sm p-2">Results for {selectedMovie?.title}</div>
-                                {subtitleSearchResults.map((sub, i) => (
-                                    <div
-                                        key={i}
-                                        className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
-                                        onClick={() => loadOnlineSubtitle(sub)}
-                                    >
-                                        <div className="flex-1 truncate">
-                                            <Badge variant="outline">{sub.language}</Badge>
-                                            <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
-                                        </div>
-                                        <Download className="w-4 h-4"/>
-                                    </div>
-                                ))}
-                                </div>
-                            </ScrollArea>
-                        )}
+                      {!isSearching && movieSearchResults.length > 0 && searchStep === 'movie' && (
+                          <ScrollArea className="h-60 mt-2 border rounded-md">
+                              <div className="p-2 space-y-2">
+                              {movieSearchResults.map((movie) => (
+                              <div
+                                  key={movie.id}
+                                  className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
+                                  onClick={() => handleSubtitleSearch(movie)}
+                              >
+                                  <div className="w-12 flex-shrink-0">
+                                  <Image
+                                      src={movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : 'https://picsum.photos/seed/1/92/138'}
+                                      width={48}
+                                      height={72}
+                                      alt={`Poster for ${movie.title}`}
+                                      className="rounded"
+                                      unoptimized
+                                  />
+                                  </div>
+                                  <div className="flex-1">
+                                      <p className="font-semibold text-sm">{movie.title}</p>
+                                      <p className="text-xs text-muted-foreground">{movie.release_date.split('-')[0]}</p>
+                                  </div>
+                              </div>
+                              ))}
+                              </div>
+                          </ScrollArea>
+                      )}
+                      
+                      {!isSearching && subtitleSearchResults.length > 0 && searchStep === 'subtitle' && (
+                          <ScrollArea className="h-60 mt-2 border rounded-md">
+                              <div className="p-2 space-y-2">
+                              <div className="font-semibold text-sm p-2">Results for {selectedMovie?.title}</div>
+                              {subtitleSearchResults.map((sub, i) => (
+                                  <div
+                                      key={i}
+                                      className="flex justify-between items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
+                                      onClick={() => loadOnlineSubtitle(sub)}
+                                  >
+                                      <div className="flex-1 truncate">
+                                          <Badge variant="outline">{sub.language}</Badge>
+                                          <span className="ml-2 text-sm text-muted-foreground truncate">{sub.fileName}</span>
+                                      </div>
+                                      <Download className="w-4 h-4"/>
+                                  </div>
+                              ))}
+                              </div>
+                          </ScrollArea>
+                      )}
 
-                    </div>
+                  </div>
 
-                    {selectedTextTrack !== "off" && (
-                    <>
-                        <Separator />
-                        <div className="grid gap-4">
-                        <Label className="font-medium leading-none">Subtitle Style</Label>
-                        <div className="grid grid-cols-2 items-center gap-4">
-                            <Label htmlFor="font-size">Font Size</Label>
-                            <Slider id="font-size" value={[subtitleSettings.fontSize]} min={0.5} max={2.5} step={0.1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, fontSize: val }))} />
-                        </div>
-                        <div className="grid grid-cols-2 items-center gap-4">
-                            <Label htmlFor="font-color">Font Color</Label>
-                            <Input id="font-color" type="color" value={subtitleSettings.color} onChange={(e) => setSubtitleSettings(s => ({ ...s, color: e.target.value }))} className="p-1 h-8" />
-                        </div>
-                        <div className="grid grid-cols-2 items-center gap-4">
-                            <Label htmlFor="position">Position</Label>
-                            <Slider id="position" value={[subtitleSettings.position]} min={0} max={80} step={1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, position: val }))} />
-                        </div>
-                        </div>
-                    </>
-                    )}
-                </div>
-            </DropdownMenuContent>
-          </DropdownMenuPortal>
+                  {selectedTextTrack !== "off" && (
+                  <>
+                      <Separator />
+                      <div className="grid gap-4">
+                      <Label className="font-medium leading-none">Subtitle Style</Label>
+                      <div className="grid grid-cols-2 items-center gap-4">
+                          <Label htmlFor="font-size">Font Size</Label>
+                          <Slider id="font-size" value={[subtitleSettings.fontSize]} min={0.5} max={2.5} step={0.1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, fontSize: val }))} />
+                      </div>
+                      <div className="grid grid-cols-2 items-center gap-4">
+                          <Label htmlFor="font-color">Font Color</Label>
+                          <Input id="font-color" type="color" value={subtitleSettings.color} onChange={(e) => setSubtitleSettings(s => ({ ...s, color: e.target.value }))} className="p-1 h-8" />
+                      </div>
+                      <div className="grid grid-cols-2 items-center gap-4">
+                          <Label htmlFor="position">Position</Label>
+                          <Slider id="position" value={[subtitleSettings.position]} min={0} max={80} step={1} onValueChange={([val]) => setSubtitleSettings(s => ({ ...s, position: val }))} />
+                      </div>
+                      </div>
+                  </>
+                  )}
+              </div>
+          </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
@@ -879,8 +873,8 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
             </div>
 
             <div className="flex items-center gap-1 text-white">
-              <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(v => !v)} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><MessageSquare /></Button>
-              <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/10"><Maximize /></Button>
+                <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(v => !v)} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><MessageSquare /></Button>
+                <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/10"><Maximize /></Button>
             </div>
           </div>
         </div>
@@ -993,6 +987,3 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     </div>
   );
 }
-
-
-
