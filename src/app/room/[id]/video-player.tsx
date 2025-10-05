@@ -613,6 +613,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
       <video
         ref={videoRef}
         src={videoSrc || undefined}
+        onClick={togglePlay}
         onPlay={() => syncState({ isPlaying: true })}
         onPause={() => !isSeeking.current && syncState({ isPlaying: false })}
         onTimeUpdate={(e) => {
