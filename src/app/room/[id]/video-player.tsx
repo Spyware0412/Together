@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -57,8 +56,7 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LoadingAnimation } from "@/components/loading-animation";
-import { VideoJsPlayer } from "@/components/video-js-player";
-import type videojs from 'video.js';
+import type { UserProfile } from '@/components/auth-form';
 
 interface Message {
     id: string;
@@ -110,14 +108,6 @@ interface TmdbMovieSearchResult {
   poster_path: string | null;
 }
 
-interface UserProfile {
-    id: string;
-    name: string;
-    email: string;
-    avatar: string;
-}
-
-
 // Helper function to convert SRT subtitles to VTT format
 const srtToVtt = (srtText: string): string => {
   let vtt = "WEBVTT\n\n";
@@ -145,7 +135,6 @@ const srtToVtt = (srtText: string): string => {
 
 export function VideoPlayer({ roomId, user, messages, lastMessage, showNotification, onNotificationClick, onCloseNotification, fileInputRef }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
-  const [videoType, setVideoType] = useState<string>('video/mp4');
   const [localFileName, setLocalFileName] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
 
@@ -157,7 +146,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const [isLoading, setIsLoading] = useState(true);
 
   const { toast } = useToast();
-  const [textTracks, setTextTracks] = useState<videojs.TextTrack[]>([]);
+  const [textTracks, setTextTracks] = useState<TextTrack[]>([]);
   const [selectedTextTrack, setSelectedTextTrack] = useState<string>("off");
   const [subtitleSettings, setSubtitleSettings] = useState<SubtitleSettings>({
     fontSize: 1,
@@ -177,10 +166,10 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const [isChatOverlayOpen, setIsChatOverlayOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
 
+  const videoRef = useRef<HTMLVideoElement>(null);
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
   const localVideoUrlRef = useRef<string | null>(null);
 
-  const playerRef = useRef<videojs.Player | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const chatViewportRef = useRef<HTMLDivElement>(null);
@@ -191,44 +180,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
   const messagesRef = ref(database, `rooms/${roomId}/chat`);
   const videoInfoRef = useRef({width: 0, height: 0});
-
-  const handlePlayerReady = (player: videojs.Player) => {
-    playerRef.current = player;
-    
-    player.on("play", () => syncState({ isPlaying: true }));
-    player.on("pause", () => !isSeeking.current && syncState({ isPlaying: false }));
-    player.on("timeupdate", () => {
-      if (isSeeking.current) return;
-      const currentTime = player.currentTime() || 0;
-      setProgress(currentTime);
-      if (Date.now() - lastSyncTimestamp.current > 3000) {
-        syncState({ progress: currentTime });
-        lastSyncTimestamp.current = Date.now();
-      }
-    });
-    player.on("durationchange", () => setDuration(player.duration() || 0));
-    player.on("loadedmetadata", () => {
-        setDuration(player.duration() || 0);
-        videoInfoRef.current = { width: player.videoWidth(), height: player.videoHeight() };
-    });
-    player.on("loadeddata", loadTracks);
-
-    player.on("volumechange", () => {
-      if (!player) return;
-      setVolume(player.volume());
-      setIsMuted(player.muted());
-    });
-  };
-
-  useEffect(() => {
-    if (containerRef.current) {
-        if (isInfoOpen || isSettingsOpen) {
-            // containerRef.current.setAttribute('inert', '');
-        } else {
-            // containerRef.current.removeAttribute('inert');
-        }
-    }
-  }, [isInfoOpen, isSettingsOpen]);
   
   useEffect(() => {
     if (chatViewportRef.current) {
@@ -275,7 +226,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           }
           if (videoSrc !== data.videoUrl) {
               setVideoSrc(data.videoUrl);
-              setVideoType('video/mp4'); // Assume URL is mp4, can be improved
           }
           setLocalFileName(data.fileName ?? "Video from URL");
       } else if (data?.fileName) {
@@ -292,18 +242,18 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           setLocalFileName(null);
       }
 
-      const player = playerRef.current;
-      if (player && data) {
+      const video = videoRef.current;
+      if (video && data) {
         const serverTime = data.progress ?? 0;
-        const clientTime = player.currentTime() || 0;
+        const clientTime = video.currentTime;
         if (Math.abs(serverTime - clientTime) > 2) {
-          player.currentTime(serverTime);
+          video.currentTime = serverTime;
         }
 
         const serverPlaying = data.isPlaying ?? false;
-        if (serverPlaying !== !player.paused()) {
-          if (serverPlaying) player.play().catch(() => {});
-          else player.pause();
+        if (serverPlaying !== !video.paused) {
+          if (serverPlaying) video.play().catch(() => {});
+          else video.pause();
         }
       }
 
@@ -321,10 +271,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           update(userStatusRef, { online: false, last_seen: serverTimestamp() });
       }
       if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
-      if (playerRef.current && !playerRef.current.isDisposed()) {
-        playerRef.current.dispose();
-        playerRef.current = null;
-      }
     };
   }, [roomId]);
 
@@ -344,7 +290,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
       localVideoUrlRef.current = newVideoSrc;
       
       setVideoSrc(newVideoSrc);
-      setVideoType(file.type);
       
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
       setSearchQuery(cleanFileName);
@@ -359,7 +304,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
         videoUrl: null, 
       });
 
-      if (playerRef.current) playerRef.current.currentTime(0);
+      if (videoRef.current) videoRef.current.currentTime = 0;
       setProgress(0);
       setSelectedTextTrack("off");
       setSearchStep('movie');
@@ -367,11 +312,11 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   };
 
   const loadTracks = useCallback(() => {
-    if (!playerRef.current) return;
-    const player = playerRef.current;
+    if (!videoRef.current) return;
+    const video = videoRef.current;
     
     setTimeout(() => {
-      const availableTextTracks = Array.from(player.textTracks());
+      const availableTextTracks = Array.from(video.textTracks);
       setTextTracks(availableTextTracks);
       
       const firstSub = availableTextTracks.find(t => t.kind === 'subtitles');
@@ -389,7 +334,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
 
   const handleSubtitleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && playerRef.current) {
+    if (file && videoRef.current) {
         if(file.name.endsWith('.srt')) {
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -408,32 +353,36 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   };
   
   const addTrackToVideo = (trackUrl: string, label: string, language: string, isExternal = true) => {
-    const player = playerRef.current;
-    if (!player) return;
+    const video = videoRef.current;
+    if (!video) return;
 
     const trackId = `${isExternal ? 'external-' : ''}${label}`;
 
     // Remove existing track if any
-    const existingTracks = player.remoteTextTracks();
-    for (let i = existingTracks.length - 1; i >= 0; i--) {
-        if (existingTracks[i].label === label) {
-            player.removeRemoteTextTrack(existingTracks[i]);
-        }
-    }
+    const existingTracks = Array.from(video.textTracks).filter(t => t.label === label);
+    existingTracks.forEach(track => {
+        // We can't directly remove text tracks. Instead we disable them.
+        track.mode = 'disabled';
+    });
+
+    // Create a new track element and append it
+    const trackElement = document.createElement('track');
+    trackElement.id = trackId;
+    trackElement.kind = 'subtitles';
+    trackElement.label = label;
+    trackElement.srclang = language;
+    trackElement.src = trackUrl;
+    trackElement.default = false; // Set to false to manage manually
     
-    const newTrack = {
-        id: trackId,
-        kind: 'subtitles',
-        label: label,
-        srclang: language,
-        src: trackUrl,
-    };
-    
-    player.addRemoteTextTrack(newTrack, false);
+    // Clear old external ref for this label
+    const oldUrl = externalSubtitlesRef.current.get(label);
+    if(oldUrl) URL.revokeObjectURL(oldUrl);
 
     if(isExternal) {
-      externalSubtitlesRef.current.set(trackId, trackUrl);
+      externalSubtitlesRef.current.set(label, trackUrl);
     }
+    
+    video.appendChild(trackElement);
     
     setTimeout(() => {
         loadTracks();
@@ -524,32 +473,35 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   }
 
   const togglePlay = () => {
-    if (!playerRef.current || isPlaybackDisabled) return;
-    syncState({ isPlaying: playerRef.current.paused() });
+    if (!videoRef.current || isPlaybackDisabled) return;
+    syncState({ isPlaying: videoRef.current.paused });
   };
 
   const handleVolumeChange = (value: number[]) => {
-    if (playerRef.current) {
+    if (videoRef.current) {
       const newVolume = value[0];
-      playerRef.current.volume(newVolume);
-      playerRef.current.muted(newVolume === 0);
+      videoRef.current.volume = newVolume;
+      setVolume(newVolume);
+      setIsMuted(newVolume === 0);
     }
   };
 
   const toggleMute = () => {
-    if (playerRef.current) {
-      const newMuted = !playerRef.current.muted();
-      playerRef.current.muted(newMuted);
-      if (!newMuted && playerRef.current.volume() === 0) {
-        playerRef.current.volume(0.5);
+    if (videoRef.current) {
+      const newMuted = !videoRef.current.muted;
+      videoRef.current.muted = newMuted;
+      setIsMuted(newMuted);
+      if (!newMuted && volume === 0) {
+        setVolume(0.5);
+        videoRef.current.volume = 0.5;
       }
     }
   };
 
   const handleProgressChangeCommit = (value: number[]) => {
-    if (playerRef.current) {
+    if (videoRef.current) {
       const newTime = value[0];
-      playerRef.current.currentTime(newTime);
+      videoRef.current.currentTime = newTime;
       setProgress(newTime);
       syncState({ progress: newTime });
       isSeeking.current = false;
@@ -562,22 +514,22 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   };
 
   const toggleFullScreen = () => {
-    const player = playerRef.current;
-    if (player) {
-      if (!player.isFullscreen()) {
-        player.requestFullscreen().catch((err) => {
-          console.error(`Error enabling fullscreen: ${err.message}`);
+    const container = containerRef.current;
+    if (container) {
+      if (!document.fullscreenElement) {
+        container.requestFullscreen().catch((err) => {
+          alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
         });
       } else {
-        player.exitFullscreen();
+        document.exitFullscreen();
       }
     }
   };
   
   useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    const tracks = player.textTracks();
+    const video = videoRef.current;
+    if (!video) return;
+    const tracks = video.textTracks;
     for (let i = 0; i < tracks.length; i++) {
         const track = tracks[i];
         track.mode = (track.label === selectedTextTrack) ? 'showing' : 'hidden';
@@ -601,19 +553,16 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     const sheet = styleElement.sheet;
     if (sheet) {
         if (sheet.cssRules.length > 0) sheet.deleteRule(0);
-        const vjsPlayerId = containerRef.current?.querySelector('.video-js')?.id;
-        if (vjsPlayerId) {
-            sheet.insertRule(`
-            #${vjsPlayerId} .vjs-text-track-display div {
-              font-size: ${subtitleSettings.fontSize * 1.5}rem !important;
+        sheet.insertRule(`
+            ::cue {
+              font-size: ${subtitleSettings.fontSize}rem !important;
               color: ${subtitleSettings.color} !important;
               background-color: rgba(0, 0, 0, 0.7) !important;
-              bottom: ${subtitleSettings.position + 2}% !important;
+              bottom: ${subtitleSettings.position}% !important;
             }
           `, 0);
-        }
     }
-  }, [subtitleSettings, videoSrc]);
+  }, [subtitleSettings]);
 
 
   const handleMouseMove = () => {
@@ -661,17 +610,33 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
 
   return (
     <div ref={containerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-        <VideoJsPlayer
-          options={{
-            autoplay: false,
-            controls: false,
-            responsive: true,
-            fluid: true,
-            sources: videoSrc ? [{ src: videoSrc, type: videoType }] : [],
-            bigPlayButton: false,
-          }}
-          onReady={handlePlayerReady}
-        />
+      <video
+        ref={videoRef}
+        src={videoSrc || undefined}
+        onPlay={() => syncState({ isPlaying: true })}
+        onPause={() => !isSeeking.current && syncState({ isPlaying: false })}
+        onTimeUpdate={(e) => {
+            if (isSeeking.current) return;
+            const currentTime = e.currentTarget.currentTime;
+            setProgress(currentTime);
+            if (Date.now() - lastSyncTimestamp.current > 3000) {
+                syncState({ progress: currentTime });
+                lastSyncTimestamp.current = Date.now();
+            }
+        }}
+        onDurationChange={(e) => setDuration(e.currentTarget.duration)}
+        onVolumeChange={(e) => {
+            setVolume(e.currentTarget.volume);
+            setIsMuted(e.currentTarget.muted);
+        }}
+        onLoadedMetadata={(e) => {
+          setDuration(e.currentTarget.duration);
+          videoInfoRef.current = { width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight };
+        }}
+        onLoadedData={loadTracks}
+        className="w-full h-full object-contain"
+        playsInline
+      ></video>
       <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       
       {isPlaybackDisabled && (
@@ -707,7 +672,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-96 z-[9999] bg-background shadow-lg rounded-md"
+            className="w-96 bg-background shadow-lg rounded-md"
             align="end"
           >
             <div className="grid gap-3 p-2">
@@ -758,7 +723,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-96 z-[9999] bg-background shadow-lg rounded-md"
+            className="w-96 bg-background shadow-lg rounded-md"
             align="end"
           >
               <div className="grid gap-4 p-2">
@@ -907,8 +872,8 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
             </div>
 
             <div className="flex items-center gap-1 text-white">
-              <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(v => !v)} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><MessageSquare /></Button>
-              <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/10"><Maximize /></Button>
+                <Button variant="ghost" size="icon" onClick={() => setIsChatOverlayOpen(v => !v)} className="text-white hover:bg-white/10" disabled={isPlaybackDisabled}><MessageSquare /></Button>
+                <Button variant="ghost" size="icon" onClick={toggleFullScreen} className="text-white hover:bg-white/10"><Maximize /></Button>
             </div>
           </div>
         </div>

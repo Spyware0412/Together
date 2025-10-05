@@ -1,7 +1,6 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import "video.js/dist/video-js.css";
 
 export const metadata: Metadata = {
   title: 'Together 💖',
