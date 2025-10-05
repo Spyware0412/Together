@@ -58,6 +58,8 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LoadingAnimation } from "@/components/loading-animation";
+import { VideoJsPlayer } from "@/components/video-js-player";
+import type videojs from 'video.js';
 
 interface Message {
     id: string;
@@ -144,6 +146,7 @@ const srtToVtt = (srtText: string): string => {
 
 export function VideoPlayer({ roomId, user, messages, lastMessage, showNotification, onNotificationClick, onCloseNotification, fileInputRef }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [videoType, setVideoType] = useState<string>('video/mp4');
   const [localFileName, setLocalFileName] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
 
@@ -155,7 +158,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const [isLoading, setIsLoading] = useState(true);
 
   const { toast } = useToast();
-  const [textTracks, setTextTracks] = useState<TextTrack[]>([]);
+  const [textTracks, setTextTracks] = useState<videojs.TextTrack[]>([]);
   const [selectedTextTrack, setSelectedTextTrack] = useState<string>("off");
   const [subtitleSettings, setSubtitleSettings] = useState<SubtitleSettings>({
     fontSize: 1,
@@ -178,8 +181,8 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const externalSubtitlesRef = useRef<Map<string, string>>(new Map());
   const localVideoUrlRef = useRef<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const playerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<videojs.Player | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const chatViewportRef = useRef<HTMLDivElement>(null);
   const isSeeking = useRef(false);
@@ -188,13 +191,42 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
 
   const roomStateRef = ref(database, `rooms/${roomId}/video`);
   const messagesRef = ref(database, `rooms/${roomId}/chat`);
+  const videoInfoRef = useRef({width: 0, height: 0});
+
+  const handlePlayerReady = (player: videojs.Player) => {
+    playerRef.current = player;
+    
+    player.on("play", () => syncState({ isPlaying: true }));
+    player.on("pause", () => !isSeeking.current && syncState({ isPlaying: false }));
+    player.on("timeupdate", () => {
+      if (isSeeking.current) return;
+      const currentTime = player.currentTime() || 0;
+      setProgress(currentTime);
+      if (Date.now() - lastSyncTimestamp.current > 3000) {
+        syncState({ progress: currentTime });
+        lastSyncTimestamp.current = Date.now();
+      }
+    });
+    player.on("durationchange", () => setDuration(player.duration() || 0));
+    player.on("loadedmetadata", () => {
+        setDuration(player.duration() || 0);
+        videoInfoRef.current = { width: player.videoWidth(), height: player.videoHeight() };
+    });
+    player.on("loadeddata", loadTracks);
+
+    player.on("volumechange", () => {
+      if (!player) return;
+      setVolume(player.volume());
+      setIsMuted(player.muted());
+    });
+  };
 
   useEffect(() => {
-    if (playerRef.current) {
+    if (containerRef.current) {
         if (isInfoOpen || isSettingsOpen) {
-            // playerRef.current.setAttribute('inert', '');
+            // containerRef.current.setAttribute('inert', '');
         } else {
-            // playerRef.current.removeAttribute('inert');
+            // containerRef.current.removeAttribute('inert');
         }
     }
   }, [isInfoOpen, isSettingsOpen]);
@@ -244,6 +276,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           }
           if (videoSrc !== data.videoUrl) {
               setVideoSrc(data.videoUrl);
+              setVideoType('video/mp4'); // Assume URL is mp4, can be improved
           }
           setLocalFileName(data.fileName ?? "Video from URL");
       } else if (data?.fileName) {
@@ -260,17 +293,18 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           setLocalFileName(null);
       }
 
-      if (videoRef.current && data) {
+      const player = playerRef.current;
+      if (player && data) {
         const serverTime = data.progress ?? 0;
-        const clientTime = videoRef.current.currentTime;
+        const clientTime = player.currentTime() || 0;
         if (Math.abs(serverTime - clientTime) > 2) {
-          videoRef.current.currentTime = serverTime;
+          player.currentTime(serverTime);
         }
 
         const serverPlaying = data.isPlaying ?? false;
-        if (serverPlaying !== !videoRef.current.paused) {
-          if (serverPlaying) videoRef.current.play().catch(() => {});
-          else videoRef.current.pause();
+        if (serverPlaying !== !player.paused()) {
+          if (serverPlaying) player.play().catch(() => {});
+          else player.pause();
         }
       }
 
@@ -288,6 +322,10 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
           update(userStatusRef, { online: false, last_seen: serverTimestamp() });
       }
       if(localVideoUrlRef.current) URL.revokeObjectURL(localVideoUrlRef.current);
+      if (playerRef.current && !playerRef.current.isDisposed()) {
+        playerRef.current.dispose();
+        playerRef.current = null;
+      }
     };
   }, [roomId]);
 
@@ -307,6 +345,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
       localVideoUrlRef.current = newVideoSrc;
       
       setVideoSrc(newVideoSrc);
+      setVideoType(file.type);
       
       const cleanFileName = file.name.replace(/\.[^/.]+$/, "");
       setSearchQuery(cleanFileName);
@@ -321,7 +360,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
         videoUrl: null, 
       });
 
-      if (videoRef.current) videoRef.current.currentTime = 0;
+      if (playerRef.current) playerRef.current.currentTime(0);
       setProgress(0);
       setSelectedTextTrack("off");
       setSearchStep('movie');
@@ -329,13 +368,13 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   };
 
   const loadTracks = useCallback(() => {
-    if (!videoRef.current) return;
-    const video = videoRef.current;
+    if (!playerRef.current) return;
+    const player = playerRef.current;
     
     setTimeout(() => {
-      const availableTextTracks = Array.from(video.textTracks);
+      const availableTextTracks = Array.from(player.textTracks());
       setTextTracks(availableTextTracks);
-
+      
       const firstSub = availableTextTracks.find(t => t.kind === 'subtitles');
       if (firstSub && selectedTextTrack === 'off') {
         availableTextTracks.forEach(t => t.mode = 'hidden');
@@ -343,7 +382,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
         setSelectedTextTrack(firstSub.label || `track-${firstSub.language}`);
       } else {
         availableTextTracks.forEach(track => {
-            track.mode = (track.label === selectedTextTrack || track.id === selectedTextTrack) ? 'showing' : 'hidden';
+            track.mode = (track.label === selectedTextTrack) ? 'showing' : 'hidden';
         });
       }
     }, 500);
@@ -351,7 +390,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
 
   const handleSubtitleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && videoRef.current) {
+    if (file && playerRef.current) {
         if(file.name.endsWith('.srt')) {
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -370,20 +409,29 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   };
   
   const addTrackToVideo = (trackUrl: string, label: string, language: string, isExternal = true) => {
-    if (!videoRef.current) return;
-    const trackId = `${isExternal ? 'external-' : ''}${label}`;
-    
-    const oldTrackEl = playerRef.current?.querySelector(`track[id="${trackId}"]`);
-    if(oldTrackEl) oldTrackEl.remove();
+    const player = playerRef.current;
+    if (!player) return;
 
-    const trackElement = document.createElement('track');
-    trackElement.id = trackId;
-    trackElement.kind = 'subtitles';
-    trackElement.label = label;
-    trackElement.srclang = language;
-    trackElement.src = trackUrl;
+    const trackId = `${isExternal ? 'external-' : ''}${label}`;
+
+    // Remove existing track if any
+    const existingTracks = player.remoteTextTracks();
+    for (let i = existingTracks.length - 1; i >= 0; i--) {
+        if (existingTracks[i].label === label) {
+            player.removeRemoteTextTrack(existingTracks[i]);
+        }
+    }
     
-    videoRef.current.appendChild(trackElement);
+    const newTrack = {
+        id: trackId,
+        kind: 'subtitles',
+        label: label,
+        srclang: language,
+        src: trackUrl,
+    };
+    
+    player.addRemoteTextTrack(newTrack, false);
+
     if(isExternal) {
       externalSubtitlesRef.current.set(trackId, trackUrl);
     }
@@ -392,7 +440,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
         loadTracks();
         setSelectedTextTrack(label);
         toast({ title: "Success", description: "Subtitle file loaded."});
-    }, 100);
+    }, 500);
   }
 
   const handleMovieSearch = async (e: React.FormEvent) => {
@@ -477,32 +525,32 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   }
 
   const togglePlay = () => {
-    if (!videoRef.current || isPlaybackDisabled) return;
-    syncState({ isPlaying: videoRef.current.paused });
+    if (!playerRef.current || isPlaybackDisabled) return;
+    syncState({ isPlaying: playerRef.current.paused() });
   };
 
   const handleVolumeChange = (value: number[]) => {
-    if (videoRef.current) {
+    if (playerRef.current) {
       const newVolume = value[0];
-      videoRef.current.volume = newVolume;
-      setVolume(newVolume);
-      videoRef.current.muted = newVolume === 0;
-      setIsMuted(newVolume === 0);
+      playerRef.current.volume(newVolume);
+      playerRef.current.muted(newVolume === 0);
     }
   };
 
   const toggleMute = () => {
-    if (videoRef.current) {
-      const newMuted = !isMuted;
-      videoRef.current.muted = newMuted;
-      if (!newMuted && volume === 0) handleVolumeChange([0.5]);
+    if (playerRef.current) {
+      const newMuted = !playerRef.current.muted();
+      playerRef.current.muted(newMuted);
+      if (!newMuted && playerRef.current.volume() === 0) {
+        playerRef.current.volume(0.5);
+      }
     }
   };
 
   const handleProgressChangeCommit = (value: number[]) => {
-    if (videoRef.current) {
+    if (playerRef.current) {
       const newTime = value[0];
-      videoRef.current.currentTime = newTime;
+      playerRef.current.currentTime(newTime);
       setProgress(newTime);
       syncState({ progress: newTime });
       isSeeking.current = false;
@@ -517,22 +565,28 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const toggleFullScreen = () => {
     const player = playerRef.current;
     if (player) {
-      if (!document.fullscreenElement) {
+      if (!player.isFullscreen()) {
         player.requestFullscreen().catch((err) => {
           console.error(`Error enabling fullscreen: ${err.message}`);
         });
       } else {
-        document.exitFullscreen();
+        player.exitFullscreen();
       }
     }
   };
   
   useEffect(() => {
-    textTracks.forEach((track) => {
-        track.mode = (track.label === selectedTextTrack || track.id === selectedTextTrack) ? 'showing' : 'hidden';
-    });
+    const player = playerRef.current;
+    if (!player) return;
+    const tracks = player.textTracks();
+    for (let i = 0; i < tracks.length; i++) {
+        const track = tracks[i];
+        track.mode = (track.label === selectedTextTrack) ? 'showing' : 'hidden';
+    }
     if (selectedTextTrack === 'off') {
-        textTracks.forEach(t => t.mode = 'hidden');
+       for (let i = 0; i < tracks.length; i++) {
+          tracks[i].mode = 'hidden';
+       }
     }
   }, [selectedTextTrack, textTracks]);
   
@@ -548,50 +602,20 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     const sheet = styleElement.sheet;
     if (sheet) {
         if (sheet.cssRules.length > 0) sheet.deleteRule(0);
-        sheet.insertRule(`
-        ::cue {
-          font-size: ${subtitleSettings.fontSize}rem !important;
-          color: ${subtitleSettings.color} !important;
-          background-color: rgba(0, 0, 0, 0.7) !important;
-          bottom: ${subtitleSettings.position}% !important;
+        const vjsPlayerId = containerRef.current?.querySelector('.video-js')?.id;
+        if (vjsPlayerId) {
+            sheet.insertRule(`
+            #${vjsPlayerId} .vjs-text-track-display div {
+              font-size: ${subtitleSettings.fontSize * 1.5}rem !important;
+              color: ${subtitleSettings.color} !important;
+              background-color: rgba(0, 0, 0, 0.7) !important;
+              bottom: ${subtitleSettings.position + 2}% !important;
+            }
+          `, 0);
         }
-      `, 0);
     }
-  }, [subtitleSettings]);
+  }, [subtitleSettings, videoSrc]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onPlay = () => syncState({ isPlaying: true });
-    const onPause = () => !isSeeking.current && syncState({ isPlaying: false });
-    const onTimeUpdate = () => {
-      if (isSeeking.current) return;
-      const currentTime = video.currentTime;
-      setProgress(currentTime);
-      if (Date.now() - lastSyncTimestamp.current > 3000) {
-        syncState({ progress: currentTime });
-        lastSyncTimestamp.current = Date.now();
-      }
-    };
-    const onDurationChange = () => video.duration !== Infinity && setDuration(video.duration);
-
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    video.addEventListener("timeupdate", onTimeUpdate);
-    video.addEventListener("durationchange", onDurationChange);
-    video.addEventListener("loadedmetadata", onDurationChange);
-    video.addEventListener("loadeddata", loadTracks);
-
-    return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-      video.removeEventListener("timeupdate", onTimeUpdate);
-      video.removeEventListener("durationchange", onDurationChange);
-      video.removeEventListener("loadedmetadata", onDurationChange);
-      video.removeEventListener("loadeddata", loadTracks);
-    };
-  }, [syncState, loadTracks]);
 
   const handleMouseMove = () => {
     setShowControls(true);
@@ -621,7 +645,6 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   const hasVideoSource = !!videoSrc;
   const isPlaybackDisabled = roomState?.fileName && !roomState.videoUrl && !localVideoUrlRef.current;
 
-  if (isPlaybackDisabled && videoRef.current && !videoRef.current.paused) videoRef.current.pause();
 
   if (!hasVideoSource && !roomState?.fileName) {
     return (
@@ -638,8 +661,18 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
   }
 
   return (
-    <div ref={playerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <video ref={videoRef} src={videoSrc ?? undefined} className="w-full h-full object-contain" onClick={togglePlay} onDoubleClick={toggleFullScreen} crossOrigin="anonymous" preload="metadata" />
+    <div ref={containerRef} className="relative w-full h-full bg-black rounded-lg overflow-hidden group" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+        <VideoJsPlayer
+          options={{
+            autoplay: false,
+            controls: false,
+            responsive: true,
+            fluid: true,
+            sources: videoSrc ? [{ src: videoSrc, type: videoType }] : [],
+            bigPlayButton: false,
+          }}
+          onReady={handlePlayerReady}
+        />
       <input id="video-upload" type="file" accept="video/*,.mkv" onChange={handleFileChange} className="hidden" ref={fileInputRef} />
       
       {isPlaybackDisabled && (
@@ -703,7 +736,7 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
                   <p>
                     <span className="font-semibold">Resolution:</span>{" "}
                     <span className="text-muted-foreground">
-                      {videoRef.current?.videoWidth}x{videoRef.current?.videoHeight}
+                      {videoInfoRef.current.width}x{videoInfoRef.current.height}
                     </span>
                   </p>
                   <p>
@@ -993,6 +1026,3 @@ export function VideoPlayer({ roomId, user, messages, lastMessage, showNotificat
     </div>
   );
 }
-
-
-
