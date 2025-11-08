@@ -71,22 +71,30 @@ export async function GET(req: Request) {
     }
 
     const tmdbData = await tmdbRes.json();
-    const imdbId = tmdbData.imdb_id;
+    const imdbId = tmdbData.imdb_id?.replace("tt", "");
 
     let subtitles = [];
+    const searchMethods = [
+      imdbId ? { imdb_id: imdbId } : null,
+      { tmdb_id: tmdbId }
+    ].filter(Boolean);
 
-    // 2. First attempt: Search OpenSubtitles using IMDb ID (if it exists)
-    if (imdbId) {
-      const imdbNumericId = imdbId.replace("tt", "");
-      const osSearchParams = new URLSearchParams({ imdb_id: imdbNumericId });
-      subtitles = await searchAndProcessSubtitles(osSearchParams);
+
+    // 2. First attempt: Search for English subtitles specifically
+    for (const method of searchMethods) {
+        const osSearchParams = new URLSearchParams({ ...method, languages: 'en' });
+        subtitles = await searchAndProcessSubtitles(osSearchParams);
+        if (subtitles.length > 0) break; // Found English subs, no need to check other methods
     }
 
-    // 3. Fallback: If no subtitles were found with IMDb ID, search using TMDb ID
+    // 3. Fallback: If no English subtitles were found, search for any language
     if (subtitles.length === 0) {
-      console.log(`Fallback to tmdb_id search for: ${tmdbId}`);
-      const osSearchParams = new URLSearchParams({ tmdb_id: tmdbId });
-      subtitles = await searchAndProcessSubtitles(osSearchParams);
+      console.log(`No English subtitles found, fallback to any language for: ${tmdbId}`);
+      for (const method of searchMethods) {
+          const osSearchParams = new URLSearchParams(method!);
+          subtitles = await searchAndProcessSubtitles(osSearchParams);
+          if (subtitles.length > 0) break; // Found some subs, no need to check other methods
+      }
     }
     
     // De-duplicate subtitles based on language
